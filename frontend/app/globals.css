@@ -1,0 +1,145 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Luxury warm palette */
+    --cream: 40 33% 97%;
+    --beige: 35 26% 94%;
+    --charcoal: 30 6% 16%;
+    --taupe: 30 8% 38%;
+
+    /* Gold accents */
+    --gold: 43 45% 59%;
+    --gold-light: 43 55% 77%;
+
+    /* Status colors */
+    --sage: 108 15% 53%;
+    --amber: 36 62% 58%;
+
+    /* Semantic colors - updated for warm theme */
+    --background: 40 33% 97%;
+    --foreground: 30 6% 16%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 30 6% 16%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 30 6% 16%;
+
+    --primary: 43 45% 59%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 35 26% 94%;
+    --secondary-foreground: 30 6% 16%;
+
+    --muted: 35 26% 94%;
+    --muted-foreground: 30 8% 38%;
+
+    --accent: 43 55% 77%;
+    --accent-foreground: 30 6% 16%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 35 20% 88%;
+    --input: 35 20% 88%;
+    --ring: 43 45% 59%;
+
+    --radius: 0.75rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}
+
+@layer components {
+  /* Glassmorphism */
+  .glass {
+    @apply bg-white/70 backdrop-blur-md border border-white/20 shadow-lg;
+  }
+
+  .glass-dark {
+    @apply bg-white/85 backdrop-blur-xl border border-white/30 shadow-lg;
+  }
+
+  .glass-card {
+    @apply glass rounded-xl transition-all duration-300 ease-out;
+  }
+
+  .glass-card:hover {
+    @apply -translate-y-0.5 shadow-xl;
+  }
+
+  /* Typography */
+  .text-serif {
+    font-family: var(--font-cormorant), 'Cormorant Garamond', serif;
+  }
+
+  .heading-serif {
+    @apply text-serif font-semibold tracking-tight text-charcoal;
+  }
+
+  /* Gold button glow */
+  .gold-glow {
+    @apply relative overflow-hidden;
+  }
+
+  .gold-glow::after {
+    content: '';
+    @apply absolute inset-0 opacity-0 transition-opacity duration-300;
+    background: linear-gradient(
+      to right,
+      transparent,
+      hsla(43, 45%, 59%, 0.3),
+      transparent
+    );
+  }
+
+  .gold-glow:hover::after {
+    @apply opacity-100;
+  }
+
+  /* Shimmer effect for progress bars */
+  .shimmer {
+    @apply relative overflow-hidden;
+  }
+
+  .shimmer::after {
+    content: '';
+    @apply absolute inset-0 -translate-x-full animate-shimmer;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      hsla(0, 0%, 100%, 0.4),
+      transparent
+    );
+  }
+
+  /* Input focus gold */
+  .input-gold:focus {
+    @apply ring-2 ring-gold/50 border-gold;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .glass-card:hover {
+    transform: none;
+  }
+
+  .shimmer::after {
+    animation: none;
+  }
+
+  .animate-pulse-gold {
+    animation: none;
+  }
+}
