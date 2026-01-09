@@ -59,11 +59,89 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// Create database schema on startup (for development)
+// Create database schema on startup and apply schema updates
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<EstateFlowDbContext>();
     db.Database.EnsureCreated();
+
+    // Apply schema updates for existing databases
+    await ApplySchemaUpdates(db);
+}
+
+static async Task ApplySchemaUpdates(EstateFlowDbContext db)
+{
+    var connection = db.Database.GetDbConnection();
+    await connection.OpenAsync();
+
+    try
+    {
+        // Check and add missing columns to documents table
+        var columnsToAdd = new[]
+        {
+            ("signature_request_id", "VARCHAR(100)"),
+            ("signature_status", "VARCHAR(50)"),
+            ("signed_file_path", "VARCHAR(500)"),
+            ("signed_at", "TIMESTAMP")
+        };
+
+        foreach (var (columnName, columnType) in columnsToAdd)
+        {
+            var checkCmd = connection.CreateCommand();
+            checkCmd.CommandText = $@"
+                SELECT COUNT(*) FROM information_schema.columns
+                WHERE table_name = 'documents' AND column_name = '{columnName}'";
+
+            var exists = Convert.ToInt32(await checkCmd.ExecuteScalarAsync()) > 0;
+
+            if (!exists)
+            {
+                var addCmd = connection.CreateCommand();
+                addCmd.CommandText = $"ALTER TABLE documents ADD COLUMN {columnName} {columnType}";
+                await addCmd.ExecuteNonQueryAsync();
+                Console.WriteLine($"Added missing column: {columnName}");
+            }
+        }
+
+        // Check and add missing columns to deal_views table
+        var dealViewColumns = new[]
+        {
+            ("document_id", "UUID"),
+            ("downloaded", "BOOLEAN DEFAULT FALSE")
+        };
+
+        // First check if deal_views table exists
+        var tableCheckCmd = connection.CreateCommand();
+        tableCheckCmd.CommandText = @"
+            SELECT COUNT(*) FROM information_schema.tables
+            WHERE table_name = 'deal_views'";
+        var tableExists = Convert.ToInt32(await tableCheckCmd.ExecuteScalarAsync()) > 0;
+
+        if (tableExists)
+        {
+            foreach (var (columnName, columnType) in dealViewColumns)
+            {
+                var checkCmd = connection.CreateCommand();
+                checkCmd.CommandText = $@"
+                    SELECT COUNT(*) FROM information_schema.columns
+                    WHERE table_name = 'deal_views' AND column_name = '{columnName}'";
+
+                var exists = Convert.ToInt32(await checkCmd.ExecuteScalarAsync()) > 0;
+
+                if (!exists)
+                {
+                    var addCmd = connection.CreateCommand();
+                    addCmd.CommandText = $"ALTER TABLE deal_views ADD COLUMN {columnName} {columnType}";
+                    await addCmd.ExecuteNonQueryAsync();
+                    Console.WriteLine($"Added missing column to deal_views: {columnName}");
+                }
+            }
+        }
+    }
+    finally
+    {
+        await connection.CloseAsync();
+    }
 }
 
 // Configure pipeline
