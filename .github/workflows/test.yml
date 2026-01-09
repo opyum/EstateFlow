@@ -18,13 +18,15 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Restore dependencies
-        run: cd backend && dotnet restore
+        run: |
+          cd backend && dotnet restore
+          cd ../EstateFlow.Api.Tests && dotnet restore
 
       - name: Build
         run: cd backend && dotnet build --no-restore
 
       - name: Test
-        run: cd backend && dotnet test --no-build --verbosity normal
+        run: cd EstateFlow.Api.Tests && dotnet test --verbosity normal
 
   frontend-tests:
     runs-on: ubuntu-latest

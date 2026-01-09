@@ -12,13 +12,13 @@ NC='\033[0m'
 
 # Backend tests
 echo -e "\n${CYAN}[1/3] Running Backend Tests...${NC}"
-cd backend
 if [ -d "EstateFlow.Api.Tests" ]; then
+    cd EstateFlow.Api.Tests
     dotnet test --verbosity normal
+    cd ..
 else
     echo "No backend tests found, skipping..."
 fi
-cd ..
 
 # Frontend unit tests
 echo -e "\n${CYAN}[2/3] Running Frontend Unit Tests...${NC}"

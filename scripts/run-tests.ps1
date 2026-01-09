@@ -2,13 +2,13 @@ Write-Host "=== Running EstateFlow Tests ===" -ForegroundColor Green
 
 # Backend tests
 Write-Host "`n[1/3] Running Backend Tests..." -ForegroundColor Cyan
-Push-Location backend
 if (Test-Path "EstateFlow.Api.Tests") {
+    Push-Location EstateFlow.Api.Tests
     dotnet test --verbosity normal
+    Pop-Location
 } else {
     Write-Host "No backend tests found, skipping..."
 }
-Pop-Location
 
 # Frontend unit tests
 Write-Host "`n[2/3] Running Frontend Unit Tests..." -ForegroundColor Cyan
