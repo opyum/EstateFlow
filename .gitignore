@@ -29,6 +29,9 @@ docker/data/
 .DS_Store
 Thumbs.db
 
+# Worktrees
+.worktrees/
+
 # Logs
 *.log
 npm-debug.log*
