@@ -8,9 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { dealsApi, stepsApi, documentsApi, analyticsApi, Deal, TimelineStep, DealAnalytics } from '@/lib/api';
+import { dealsApi, stepsApi, documentsApi, analyticsApi, signaturesApi, Deal, TimelineStep, DealAnalytics, Document } from '@/lib/api';
 import { DocumentUploadModal } from '@/components/ui/document-upload-modal';
-import { ArrowLeft, Plus, Check, Clock, Circle, ExternalLink, Trash2, Upload, Eye, Download } from 'lucide-react';
+import { ArrowLeft, Plus, Check, Clock, Circle, ExternalLink, Trash2, Upload, Eye, Download, Pen, CheckCircle, AlertCircle } from 'lucide-react';
 
 export default function DealDetailPage() {
   const params = useParams();
@@ -105,6 +105,32 @@ export default function DealDetailPage() {
       loadDeal();
     } catch (error) {
       console.error('Failed to delete document:', error);
+    }
+  };
+
+  const requestSignature = async (documentId: string) => {
+    try {
+      await signaturesApi.requestSignature(token!, dealId, documentId);
+      loadDeal();
+    } catch (error) {
+      console.error('Failed to request signature:', error);
+      alert('Erreur: ' + (error as Error).message);
+    }
+  };
+
+  const getSignatureStatusBadge = (doc: Document) => {
+    if (!doc.signatureRequestId) return null;
+
+    switch (doc.signatureStatus) {
+      case 'done':
+        return <Badge className="ml-2 bg-green-100 text-green-800"><CheckCircle className="h-3 w-3 mr-1" />Signe</Badge>;
+      case 'ongoing':
+        return <Badge className="ml-2 bg-yellow-100 text-yellow-800"><Clock className="h-3 w-3 mr-1" />En attente</Badge>;
+      case 'expired':
+      case 'canceled':
+        return <Badge className="ml-2 bg-red-100 text-red-800"><AlertCircle className="h-3 w-3 mr-1" />{doc.signatureStatus}</Badge>;
+      default:
+        return <Badge variant="outline" className="ml-2">{doc.signatureStatus}</Badge>;
     }
   };
 
@@ -266,13 +292,28 @@ export default function DealDetailPage() {
                       key={doc.id}
                       className="flex items-center justify-between p-3 border rounded-lg"
                     >
-                      <div>
-                        <p className="font-medium">{doc.filename}</p>
-                        <Badge variant={doc.category === 'ToSign' ? 'default' : 'secondary'}>
-                          {doc.category === 'ToSign' ? 'A signer' : 'Reference'}
-                        </Badge>
+                      <div className="flex items-center gap-2">
+                        <div>
+                          <p className="font-medium">{doc.filename}</p>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={doc.category === 'ToSign' ? 'default' : 'secondary'}>
+                              {doc.category === 'ToSign' ? 'A signer' : 'Reference'}
+                            </Badge>
+                            {getSignatureStatusBadge(doc)}
+                          </div>
+                        </div>
                       </div>
                       <div className="flex items-center gap-2">
+                        {doc.category === 'ToSign' && !doc.signatureRequestId && (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => requestSignature(doc.id)}
+                          >
+                            <Pen className="h-4 w-4 mr-1" />
+                            Signature
+                          </Button>
+                        )}
                         <a
                           href={`${apiUrl}/api/deals/${dealId}/documents/${doc.id}/download`}
                           target="_blank"

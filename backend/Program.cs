@@ -43,6 +43,7 @@ builder.Services.AddAuthorization();
 // Services
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddSingleton<IYousignService, YousignService>();
 
 // CORS
 builder.Services.AddCors(options =>

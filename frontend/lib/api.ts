@@ -164,6 +164,31 @@ export const analyticsApi = {
     apiFetch<DealAnalytics>(`/api/deals/${dealId}/analytics`, { token }),
 };
 
+// Signatures
+export interface SignatureRequest {
+  signatureRequestId: string;
+  signerUrl: string;
+  status: string;
+}
+
+export interface SignatureStatusResponse {
+  status: string;
+  signedAt: string | null;
+}
+
+export const signaturesApi = {
+  requestSignature: (token: string, dealId: string, documentId: string) =>
+    apiFetch<SignatureRequest>(`/api/deals/${dealId}/documents/${documentId}/signature/request`, {
+      token,
+      method: 'POST',
+    }),
+
+  getStatus: (token: string, dealId: string, documentId: string) =>
+    apiFetch<SignatureStatusResponse>(`/api/deals/${dealId}/documents/${documentId}/signature/status`, {
+      token,
+    }),
+};
+
 // Public Deal
 export const publicApi = {
   getDeal: (accessToken: string) =>
@@ -241,6 +266,9 @@ export interface Document {
   filename: string;
   category: string;
   uploadedAt: string;
+  signatureRequestId?: string;
+  signatureStatus?: string;
+  signedAt?: string;
 }
 
 export interface Template {

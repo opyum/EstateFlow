@@ -35,6 +35,21 @@ public class Document
     [Column("uploaded_at")]
     public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
 
+    [Column("signature_request_id")]
+    [MaxLength(100)]
+    public string? SignatureRequestId { get; set; }
+
+    [Column("signature_status")]
+    [MaxLength(50)]
+    public string? SignatureStatus { get; set; }
+
+    [Column("signed_file_path")]
+    [MaxLength(500)]
+    public string? SignedFilePath { get; set; }
+
+    [Column("signed_at")]
+    public DateTime? SignedAt { get; set; }
+
     // Navigation
     [ForeignKey("DealId")]
     public Deal Deal { get; set; } = null!;
