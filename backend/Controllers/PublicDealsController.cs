@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using EstateFlow.Api.Data;
+using EstateFlow.Api.Data.Entities;
 
 namespace EstateFlow.Api.Controllers;
 
@@ -86,6 +87,17 @@ public class PublicDealsController : ControllerBase
             d.Id, d.Filename, d.Category.ToString(), d.UploadedAt
         )).ToList();
 
+        // Log the view
+        var dealView = new DealView
+        {
+            DealId = deal.Id,
+            Type = ViewType.PageView,
+            UserAgent = Request.Headers["User-Agent"].FirstOrDefault(),
+            IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
+        };
+        _context.DealViews.Add(dealView);
+        await _context.SaveChangesAsync();
+
         return Ok(new PublicDealDto(
             deal.ClientName,
             deal.PropertyAddress,
@@ -115,6 +127,18 @@ public class PublicDealsController : ControllerBase
 
         if (!System.IO.File.Exists(document.FilePath))
             return NotFound(new { error = "File not found on server" });
+
+        // Log the download
+        var downloadView = new DealView
+        {
+            DealId = deal.Id,
+            Type = ViewType.DocumentDownload,
+            DocumentId = documentId,
+            UserAgent = Request.Headers["User-Agent"].FirstOrDefault(),
+            IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
+        };
+        _context.DealViews.Add(downloadView);
+        await _context.SaveChangesAsync();
 
         var bytes = await System.IO.File.ReadAllBytesAsync(document.FilePath);
         var contentType = GetContentType(document.Filename);

@@ -15,6 +15,7 @@ public class EstateFlowDbContext : DbContext
     public DbSet<Document> Documents => Set<Document>();
     public DbSet<TimelineTemplate> TimelineTemplates => Set<TimelineTemplate>();
     public DbSet<MagicLink> MagicLinks => Set<MagicLink>();
+    public DbSet<DealView> DealViews => Set<DealView>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -74,6 +75,26 @@ public class EstateFlowDbContext : DbContext
                   .WithMany(a => a.MagicLinks)
                   .HasForeignKey(m => m.AgentId)
                   .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // DealView
+        modelBuilder.Entity<DealView>(entity =>
+        {
+            entity.Property(e => e.Type)
+                  .HasConversion<string>();
+
+            entity.HasOne(v => v.Deal)
+                  .WithMany()
+                  .HasForeignKey(v => v.DealId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(v => v.Document)
+                  .WithMany()
+                  .HasForeignKey(v => v.DocumentId)
+                  .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasIndex(e => e.DealId);
+            entity.HasIndex(e => e.ViewedAt);
         });
 
         // Seed timeline templates

@@ -147,6 +147,23 @@ export const documentsApi = {
     }),
 };
 
+// Analytics
+export interface DealAnalytics {
+  totalViews: number;
+  totalDownloads: number;
+  lastViewedAt: string | null;
+  recentViews: {
+    type: string;
+    documentName: string | null;
+    viewedAt: string;
+  }[];
+}
+
+export const analyticsApi = {
+  getDealAnalytics: (token: string, dealId: string) =>
+    apiFetch<DealAnalytics>(`/api/deals/${dealId}/analytics`, { token }),
+};
+
 // Public Deal
 export const publicApi = {
   getDeal: (accessToken: string) =>

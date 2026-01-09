@@ -8,9 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { dealsApi, stepsApi, documentsApi, Deal, TimelineStep } from '@/lib/api';
+import { dealsApi, stepsApi, documentsApi, analyticsApi, Deal, TimelineStep, DealAnalytics } from '@/lib/api';
 import { DocumentUploadModal } from '@/components/ui/document-upload-modal';
-import { ArrowLeft, Plus, Check, Clock, Circle, ExternalLink, Trash2, Upload } from 'lucide-react';
+import { ArrowLeft, Plus, Check, Clock, Circle, ExternalLink, Trash2, Upload, Eye, Download } from 'lucide-react';
 
 export default function DealDetailPage() {
   const params = useParams();
@@ -21,6 +21,7 @@ export default function DealDetailPage() {
   const [newStepTitle, setNewStepTitle] = useState('');
   const [isAddingStep, setIsAddingStep] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [analytics, setAnalytics] = useState<DealAnalytics | null>(null);
 
   const dealId = params.id as string;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
@@ -34,8 +35,12 @@ export default function DealDetailPage() {
 
   const loadDeal = async () => {
     try {
-      const data = await dealsApi.get(token!, dealId);
-      setDeal(data);
+      const [dealData, analyticsData] = await Promise.all([
+        dealsApi.get(token!, dealId),
+        analyticsApi.getDealAnalytics(token!, dealId)
+      ]);
+      setDeal(dealData);
+      setAnalytics(analyticsData);
     } catch (error) {
       console.error('Failed to load deal:', error);
     } finally {
@@ -343,6 +348,65 @@ export default function DealDetailPage() {
               >
                 Copier le lien
               </Button>
+            </CardContent>
+          </Card>
+
+          {/* Analytics */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Activite client</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {analytics ? (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="text-center p-3 bg-blue-50 rounded-lg">
+                      <div className="flex items-center justify-center gap-1 text-blue-600">
+                        <Eye className="h-4 w-4" />
+                        <span className="text-2xl font-bold">{analytics.totalViews}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">Consultations</p>
+                    </div>
+                    <div className="text-center p-3 bg-green-50 rounded-lg">
+                      <div className="flex items-center justify-center gap-1 text-green-600">
+                        <Download className="h-4 w-4" />
+                        <span className="text-2xl font-bold">{analytics.totalDownloads}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">Telechargements</p>
+                    </div>
+                  </div>
+                  {analytics.lastViewedAt && (
+                    <div className="text-sm text-muted-foreground">
+                      <span className="font-medium">Derniere visite:</span>{' '}
+                      {new Date(analytics.lastViewedAt).toLocaleString('fr-FR')}
+                    </div>
+                  )}
+                  {analytics.recentViews.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Activite recente</p>
+                      <div className="max-h-32 overflow-y-auto space-y-1">
+                        {analytics.recentViews.slice(0, 5).map((view, i) => (
+                          <div key={i} className="text-xs flex items-center gap-2 text-muted-foreground">
+                            {view.type === 'PageView' ? (
+                              <Eye className="h-3 w-3" />
+                            ) : (
+                              <Download className="h-3 w-3" />
+                            )}
+                            <span>
+                              {view.type === 'PageView' ? 'Consultation' : `Telecharge: ${view.documentName}`}
+                            </span>
+                            <span className="ml-auto">
+                              {new Date(view.viewedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center">Chargement...</p>
+              )}
             </CardContent>
           </Card>
         </div>
