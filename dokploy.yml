@@ -1,15 +1,12 @@
-version: '3.8'
+version: "1.0"
 
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: estateflow-db
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -17,22 +14,19 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - estateflow-network
 
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: estateflow-api
     environment:
-      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT}
-      - DATABASE_URL=${DATABASE_URL}
+      - ASPNETCORE_ENVIRONMENT=Production
+      - DATABASE_URL=Host=postgres;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       - JWT_SECRET=${JWT_SECRET}
       - JWT_ISSUER=${JWT_ISSUER}
       - JWT_AUDIENCE=${JWT_AUDIENCE}
-      - JWT_EXPIRY_HOURS=${JWT_EXPIRY_HOURS}
-      - MAGIC_LINK_EXPIRY_MINUTES=${MAGIC_LINK_EXPIRY_MINUTES}
+      - JWT_EXPIRY_HOURS=24
+      - MAGIC_LINK_EXPIRY_MINUTES=15
       - FRONTEND_URL=${FRONTEND_URL}
       - RESEND_API_KEY=${RESEND_API_KEY}
       - EMAIL_FROM=${EMAIL_FROM}
@@ -40,42 +34,34 @@ services:
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
       - STRIPE_PRICE_ID_MONTHLY=${STRIPE_PRICE_ID_MONTHLY}
       - STRIPE_PRICE_ID_YEARLY=${STRIPE_PRICE_ID_YEARLY}
-      - UPLOAD_PATH=${UPLOAD_PATH}
+      - UPLOAD_PATH=/app/uploads
       - YOUSIGN_API_KEY=${YOUSIGN_API_KEY}
       - YOUSIGN_API_URL=${YOUSIGN_API_URL}
       - YOUSIGN_WEBHOOK_SECRET=${YOUSIGN_WEBHOOK_SECRET}
-    ports:
-      - "5000:8080"
     volumes:
       - uploads_data:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
-    networks:
-      - estateflow-network
+    ports:
+      - "5000:8080"
+    domains:
+      - api.estateflow.fr
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
-        - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
-    container_name: estateflow-web
-    environment:
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
-      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
-    ports:
-      - "3001:3000"
+        - NEXT_PUBLIC_API_URL=https://api.estateflow.fr
+        - NEXT_PUBLIC_APP_URL=https://app.estateflow.fr
     depends_on:
       - backend
-    networks:
-      - estateflow-network
+    ports:
+      - "3000:3000"
+    domains:
+      - app.estateflow.fr
 
 volumes:
   postgres_data:
   uploads_data:
-
-networks:
-  estateflow-network:
-    driver: bridge
