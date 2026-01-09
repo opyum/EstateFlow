@@ -116,6 +116,37 @@ export const templatesApi = {
     apiFetch<Template[]>('/api/templates', { token }),
 };
 
+// Documents
+export const documentsApi = {
+  upload: async (token: string, dealId: string, file: File, category: 'ToSign' | 'Reference' = 'Reference') => {
+    const API_URL_LOCAL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('category', category);
+
+    const response = await fetch(`${API_URL_LOCAL}/api/deals/${dealId}/documents`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Upload failed' }));
+      throw new Error(error.error || 'Upload failed');
+    }
+
+    return response.json() as Promise<Document>;
+  },
+
+  delete: (token: string, dealId: string, documentId: string) =>
+    apiFetch<void>(`/api/deals/${dealId}/documents/${documentId}`, {
+      token,
+      method: 'DELETE'
+    }),
+};
+
 // Public Deal
 export const publicApi = {
   getDeal: (accessToken: string) =>

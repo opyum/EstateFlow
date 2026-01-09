@@ -8,7 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { dealsApi, stepsApi, Deal, TimelineStep } from '@/lib/api';
+import { dealsApi, stepsApi, documentsApi, Deal, TimelineStep } from '@/lib/api';
+import { DocumentUploadModal } from '@/components/ui/document-upload-modal';
 import { ArrowLeft, Plus, Check, Clock, Circle, ExternalLink, Trash2, Upload } from 'lucide-react';
 
 export default function DealDetailPage() {
@@ -19,6 +20,7 @@ export default function DealDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [newStepTitle, setNewStepTitle] = useState('');
   const [isAddingStep, setIsAddingStep] = useState(false);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
   const dealId = params.id as string;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
@@ -82,6 +84,22 @@ export default function DealDetailPage() {
       loadDeal();
     } catch (error) {
       console.error('Failed to update deal status:', error);
+    }
+  };
+
+  const handleDocumentUpload = async (file: File, category: 'ToSign' | 'Reference') => {
+    await documentsApi.upload(token!, dealId, file, category);
+    loadDeal();
+  };
+
+  const deleteDocument = async (documentId: string) => {
+    if (!confirm('Supprimer ce document ?')) return;
+
+    try {
+      await documentsApi.delete(token!, dealId, documentId);
+      loadDeal();
+    } catch (error) {
+      console.error('Failed to delete document:', error);
     }
   };
 
@@ -226,7 +244,7 @@ export default function DealDetailPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Documents</CardTitle>
-              <Button size="sm" variant="outline">
+              <Button size="sm" variant="outline" onClick={() => setIsUploadModalOpen(true)}>
                 <Upload className="h-4 w-4 mr-2" />
                 Ajouter
               </Button>
@@ -245,17 +263,28 @@ export default function DealDetailPage() {
                     >
                       <div>
                         <p className="font-medium">{doc.filename}</p>
-                        <p className="text-sm text-muted-foreground">{doc.category}</p>
+                        <Badge variant={doc.category === 'ToSign' ? 'default' : 'secondary'}>
+                          {doc.category === 'ToSign' ? 'A signer' : 'Reference'}
+                        </Badge>
                       </div>
-                      <a
-                        href={`${apiUrl}/api/deals/${dealId}/documents/${doc.id}/download`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <Button variant="outline" size="sm">
-                          Telecharger
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={`${apiUrl}/api/deals/${dealId}/documents/${doc.id}/download`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <Button variant="outline" size="sm">
+                            Telecharger
+                          </Button>
+                        </a>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => deleteDocument(doc.id)}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-500" />
                         </Button>
-                      </a>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -318,6 +347,12 @@ export default function DealDetailPage() {
           </Card>
         </div>
       </div>
+
+      <DocumentUploadModal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        onUpload={handleDocumentUpload}
+      />
     </div>
   );
 }
