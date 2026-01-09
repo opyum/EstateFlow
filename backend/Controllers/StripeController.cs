@@ -192,7 +192,7 @@ public class StripeController : ControllerBase
     [Authorize]
     public async Task<ActionResult<PortalResponse>> CreatePortalSession()
     {
-        if (string.IsNullOrEmpty(_stripeSecretKey) || _stripeSecretKey.StartsWith("sk_"))
+        if (string.IsNullOrEmpty(_stripeSecretKey) || !_stripeSecretKey.StartsWith("sk_"))
         {
             return BadRequest(new { error = "Stripe not configured" });
         }
