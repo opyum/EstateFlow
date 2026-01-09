@@ -209,6 +209,12 @@ export const stripeApi = {
 
   getSubscription: (token: string) =>
     apiFetch<SubscriptionInfo>('/api/stripe/subscription', { token }),
+
+  syncSubscription: (token: string) =>
+    apiFetch<{ message: string; status: string }>('/api/stripe/sync', {
+      token,
+      method: 'POST',
+    }),
 };
 
 // Deals - additional endpoint

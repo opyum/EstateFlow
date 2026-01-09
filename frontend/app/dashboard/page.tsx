@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/lib/auth';
@@ -11,14 +12,34 @@ import { StatCard } from '@/components/ui/stat-card';
 import { SerifHeading } from '@/components/ui/serif-heading';
 import { ShimmerProgress } from '@/components/ui/shimmer-progress';
 import { AnimatedSection } from '@/components/ui/animated-section';
-import { agentApi, dealsApi, AgentStats, Deal } from '@/lib/api';
+import { agentApi, dealsApi, stripeApi, AgentStats, Deal } from '@/lib/api';
 import { Plus, FileText, CheckCircle, Clock, Sparkles, ArrowRight } from 'lucide-react';
 
 export default function DashboardPage() {
-  const { token, agent } = useAuth();
+  const { token, agent, refreshAgent } = useAuth();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [stats, setStats] = useState<AgentStats | null>(null);
   const [recentDeals, setRecentDeals] = useState<Deal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // Handle return from Stripe checkout
+  useEffect(() => {
+    const sessionId = searchParams.get('session_id');
+    if (sessionId && token && !isSyncing) {
+      setIsSyncing(true);
+      // Sync subscription status from Stripe and refresh agent data
+      stripeApi.syncSubscription(token)
+        .then(() => refreshAgent())
+        .catch(console.error)
+        .finally(() => {
+          setIsSyncing(false);
+          // Remove session_id from URL to prevent re-syncing on refresh
+          router.replace('/dashboard', { scroll: false });
+        });
+    }
+  }, [searchParams, token, refreshAgent, router, isSyncing]);
 
   useEffect(() => {
     if (token) {
