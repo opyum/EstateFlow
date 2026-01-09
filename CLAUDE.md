@@ -77,3 +77,37 @@ Entity relationships:
 - Deal -> TimelineSteps (1:N)
 - Deal -> Documents (1:N)
 - Agent -> MagicLinks (1:N)
+
+## Deployment
+
+### Production Infrastructure
+- **Platform**: Dokploy (self-hosted on VPS at 72.62.181.156:3000)
+- **Domain**: estateflow.cloud (frontend), api.estateflow.cloud (backend)
+- **DNS**: Hostinger
+
+### Deployment Process
+1. Push code to `main` branch on GitHub (opyum/EstateFlow)
+2. Go to Dokploy dashboard → Projects → EstateFlow → production → estateflow-stack
+3. Click "Deploy" button → Confirm
+4. Dokploy pulls from GitHub, builds Docker images, and restarts services
+
+### Dokploy Configuration
+- **Provider**: Git (SSH key authentication)
+- **Repository**: git@github.com:opyum/EstateFlow.git
+- **Branch**: main
+- **Compose Path**: ./docker-compose.yml
+- **Autodeploy**: Enabled (can be triggered via webhook)
+
+### Webhook URL (for CI/CD)
+```
+http://72.62.181.156:3000/api/deploy/compose/{compose-id}
+```
+
+### Services Deployed
+- `postgres` - PostgreSQL 16 database
+- `backend` - .NET 9 API (port 5000 → 8080 internal)
+- `frontend` - Next.js 14 (port 3001 → 3000 internal)
+
+### Monitoring
+- Dokploy dashboard: Logs, Deployments, Monitoring tabs
+- Health check: https://api.estateflow.cloud/health
