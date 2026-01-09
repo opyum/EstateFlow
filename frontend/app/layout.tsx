@@ -1,11 +1,12 @@
 import type { Metadata } from 'next'
-import { Inter, Cormorant_Garamond } from 'next/font/google'
+import { Cormorant_Garamond, Outfit } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/lib/auth'
+import { LanguageProvider } from '@/lib/i18n'
 
-const inter = Inter({
+const outfit = Outfit({
   subsets: ['latin'],
-  variable: '--font-inter',
+  variable: '--font-outfit',
 })
 
 const cormorant = Cormorant_Garamond({
@@ -26,11 +27,13 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="fr" className={`${inter.variable} ${cormorant.variable}`}>
-      <body className={inter.className}>
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+    <html lang="fr" className={`${outfit.variable} ${cormorant.variable}`}>
+      <body className={outfit.className}>
+        <LanguageProvider>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </LanguageProvider>
       </body>
     </html>
   )

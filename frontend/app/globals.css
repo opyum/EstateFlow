@@ -127,19 +127,86 @@
   .input-gold:focus {
     @apply ring-2 ring-gold/50 border-gold;
   }
+
+  /* Luxury grid pattern */
+  .luxury-grid {
+    background-image:
+      linear-gradient(to right, hsla(43, 45%, 59%, 0.03) 1px, transparent 1px),
+      linear-gradient(to bottom, hsla(43, 45%, 59%, 0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+  }
+
+  /* Gold gradient text */
+  .text-gradient-gold {
+    background: linear-gradient(135deg, hsl(43, 55%, 77%) 0%, hsl(43, 45%, 59%) 50%, hsl(43, 55%, 77%) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Decorative line */
+  .decorative-line {
+    @apply relative;
+  }
+
+  .decorative-line::after {
+    content: '';
+    @apply absolute left-0 bottom-0 h-0.5 bg-gradient-to-r from-gold via-gold-light to-transparent;
+    width: 0;
+    animation: line-grow 1s ease-out 0.5s forwards;
+  }
+
+  /* Noise texture overlay */
+  .noise-overlay {
+    position: relative;
+  }
+
+  .noise-overlay::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    opacity: 0.02;
+    pointer-events: none;
+  }
+
+  /* Premium card hover */
+  .premium-card {
+    @apply relative overflow-hidden transition-all duration-500;
+  }
+
+  .premium-card::before {
+    content: '';
+    @apply absolute inset-0 opacity-0 transition-opacity duration-500;
+    background: linear-gradient(135deg, hsla(43, 45%, 59%, 0.1) 0%, transparent 50%);
+  }
+
+  .premium-card:hover::before {
+    @apply opacity-100;
+  }
+
+  .premium-card:hover {
+    @apply -translate-y-1 shadow-2xl;
+    box-shadow: 0 25px 50px -12px hsla(43, 45%, 59%, 0.15);
+  }
 }
 
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
-  .glass-card:hover {
+  .glass-card:hover,
+  .premium-card:hover {
     transform: none;
   }
 
-  .shimmer::after {
+  .shimmer::after,
+  .decorative-line::after {
     animation: none;
   }
 
-  .animate-pulse-gold {
+  .animate-pulse-gold,
+  .animate-float,
+  .animate-float-slow,
+  .animate-gradient-shift {
     animation: none;
   }
 }
