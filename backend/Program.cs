@@ -218,12 +218,15 @@ static async Task ApplySchemaUpdates(EstateFlowDbContext db)
         var allowedColumns = new HashSet<string>
         {
             "signature_request_id", "signature_status", "signed_file_path", "signed_at",
-            "document_id", "downloaded"
+            "document_id", "downloaded",
+            "expected_duration_days", "inactivity_warning_days", "inactivity_critical_days",
+            "started_at", "last_activity_at"
         };
 
         var allowedTypes = new HashSet<string>
         {
-            "VARCHAR(100)", "VARCHAR(50)", "VARCHAR(500)", "TIMESTAMP", "UUID", "BOOLEAN DEFAULT FALSE"
+            "VARCHAR(100)", "VARCHAR(50)", "VARCHAR(500)", "TIMESTAMP", "UUID", "BOOLEAN DEFAULT FALSE",
+            "INTEGER DEFAULT 14", "INTEGER DEFAULT 5", "INTEGER DEFAULT 10"
         };
 
         // Check and add missing columns to documents table
@@ -320,6 +323,51 @@ static async Task ApplySchemaUpdates(EstateFlowDbContext db)
                     await addCmd.ExecuteNonQueryAsync();
                     Console.WriteLine($"Added missing column to deal_views: {columnName}");
                 }
+            }
+        }
+
+        // ========== Dashboard indicator columns for timeline_steps table ==========
+        var timelineStepColumns = new[]
+        {
+            ("expected_duration_days", "INTEGER DEFAULT 14"),
+            ("inactivity_warning_days", "INTEGER DEFAULT 5"),
+            ("inactivity_critical_days", "INTEGER DEFAULT 10"),
+            ("started_at", "TIMESTAMP"),
+            ("last_activity_at", "TIMESTAMP")
+        };
+
+        foreach (var (columnName, columnType) in timelineStepColumns)
+        {
+            // Validate against whitelist
+            if (!allowedColumns.Contains(columnName) || !allowedTypes.Contains(columnType))
+            {
+                Console.WriteLine($"Skipping invalid column: {columnName}");
+                continue;
+            }
+
+            var checkCmd = connection.CreateCommand();
+            checkCmd.CommandText = @"
+                SELECT COUNT(*) FROM information_schema.columns
+                WHERE table_name = @tableName AND column_name = @columnName";
+
+            var tableParam = checkCmd.CreateParameter();
+            tableParam.ParameterName = "@tableName";
+            tableParam.Value = "timeline_steps";
+            checkCmd.Parameters.Add(tableParam);
+
+            var columnParam = checkCmd.CreateParameter();
+            columnParam.ParameterName = "@columnName";
+            columnParam.Value = columnName;
+            checkCmd.Parameters.Add(columnParam);
+
+            var exists = Convert.ToInt32(await checkCmd.ExecuteScalarAsync()) > 0;
+
+            if (!exists)
+            {
+                var addCmd = connection.CreateCommand();
+                addCmd.CommandText = $"ALTER TABLE timeline_steps ADD COLUMN \"{columnName}\" {columnType}";
+                await addCmd.ExecuteNonQueryAsync();
+                Console.WriteLine($"Added missing column to timeline_steps: {columnName}");
             }
         }
     }
