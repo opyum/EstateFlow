@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -17,18 +16,14 @@ public class DealsController : ControllerBase
     private readonly EstateFlowDbContext _context;
     private readonly IAuthService _authService;
     private readonly IEmailService _emailService;
+    private readonly IOrganizationContextService _orgContext;
 
-    public DealsController(EstateFlowDbContext context, IAuthService authService, IEmailService emailService)
+    public DealsController(EstateFlowDbContext context, IAuthService authService, IEmailService emailService, IOrganizationContextService orgContext)
     {
         _context = context;
         _authService = authService;
         _emailService = emailService;
-    }
-
-    private Guid GetCurrentAgentId()
-    {
-        var claim = User.FindFirst(ClaimTypes.NameIdentifier);
-        return claim != null ? Guid.Parse(claim.Value) : Guid.Empty;
+        _orgContext = orgContext;
     }
 
     public record DealDto(
@@ -83,11 +78,23 @@ public class DealsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<List<DealDto>>> GetDeals([FromQuery] string? status)
     {
-        var agentId = GetCurrentAgentId();
-        var query = _context.Deals
+        var agentId = _orgContext.GetCurrentAgentId();
+        var orgId = _orgContext.GetCurrentOrganizationId();
+        var role = _orgContext.GetCurrentRole();
+
+        IQueryable<Deal> query = _context.Deals
             .Include(d => d.TimelineSteps.OrderBy(t => t.Order))
-            .Include(d => d.Documents)
-            .Where(d => d.AgentId == agentId);
+            .Include(d => d.Documents);
+
+        // Role-based filtering: Employees see only their assigned deals, Admin/TeamLead see all org deals
+        if (role == Role.Employee)
+        {
+            query = query.Where(d => d.AssignedToAgentId == agentId);
+        }
+        else
+        {
+            query = query.Where(d => d.OrganizationId == orgId);
+        }
 
         if (!string.IsNullOrEmpty(status) && Enum.TryParse<DealStatus>(status, true, out var dealStatus))
         {
@@ -101,14 +108,21 @@ public class DealsController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<DealDto>> GetDeal(Guid id)
     {
-        var agentId = GetCurrentAgentId();
+        var agentId = _orgContext.GetCurrentAgentId();
+        var orgId = _orgContext.GetCurrentOrganizationId();
+        var role = _orgContext.GetCurrentRole();
+
         var deal = await _context.Deals
             .Include(d => d.TimelineSteps.OrderBy(t => t.Order))
             .Include(d => d.Documents)
-            .FirstOrDefaultAsync(d => d.Id == id && d.AgentId == agentId);
+            .FirstOrDefaultAsync(d => d.Id == id && d.OrganizationId == orgId);
 
         if (deal == null)
             return NotFound(new { error = "Deal not found" });
+
+        // Employees can only access deals assigned to them
+        if (role == Role.Employee && deal.AssignedToAgentId != agentId)
+            return Forbid();
 
         return Ok(ToDto(deal));
     }
@@ -118,18 +132,18 @@ public class DealsController : ControllerBase
     [HttpGet("can-create")]
     public async Task<ActionResult<CanCreateDealResponse>> CanCreateDeal()
     {
-        var agentId = GetCurrentAgentId();
-        var agent = await _context.Agents
-            .Include(a => a.Deals)
-            .FirstOrDefaultAsync(a => a.Id == agentId);
+        var orgId = _orgContext.GetCurrentOrganizationId();
+        var organization = await _context.Organizations
+            .Include(o => o.Deals)
+            .FirstOrDefaultAsync(o => o.Id == orgId);
 
-        if (agent == null)
-            return NotFound(new { error = "Agent not found" });
+        if (organization == null)
+            return NotFound(new { error = "Organization not found" });
 
-        var dealCount = agent.Deals.Count;
+        var dealCount = organization.Deals.Count;
 
         // If subscription is active, no limit
-        if (agent.SubscriptionStatus == SubscriptionStatus.Active)
+        if (organization.SubscriptionStatus == SubscriptionStatus.Active)
         {
             return Ok(new CanCreateDealResponse(true, dealCount, null));
         }
@@ -146,16 +160,22 @@ public class DealsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<DealDto>> CreateDeal([FromBody] CreateDealRequest request)
     {
-        var agentId = GetCurrentAgentId();
-        var agent = await _context.Agents
-            .Include(a => a.Deals)
-            .FirstOrDefaultAsync(a => a.Id == agentId);
+        var agentId = _orgContext.GetCurrentAgentId();
+        var orgId = _orgContext.GetCurrentOrganizationId();
 
+        var organization = await _context.Organizations
+            .Include(o => o.Deals)
+            .FirstOrDefaultAsync(o => o.Id == orgId);
+
+        if (organization == null)
+            return NotFound(new { error = "Organization not found" });
+
+        var agent = await _context.Agents.FindAsync(agentId);
         if (agent == null)
             return NotFound(new { error = "Agent not found" });
 
-        // Check deal limit for trial users
-        if (agent.SubscriptionStatus != SubscriptionStatus.Active && agent.Deals.Count >= 1)
+        // Check deal limit for trial users at org level
+        if (organization.SubscriptionStatus != SubscriptionStatus.Active && organization.Deals.Count >= 1)
         {
             return StatusCode(403, new { error = "Passez à Pro pour créer plus de transactions" });
         }
@@ -163,6 +183,9 @@ public class DealsController : ControllerBase
         var deal = new Deal
         {
             AgentId = agentId,
+            OrganizationId = orgId,
+            AssignedToAgentId = agentId,
+            CreatedByAgentId = agentId,
             ClientName = request.ClientName,
             ClientEmail = request.ClientEmail,
             PropertyAddress = request.PropertyAddress,
@@ -216,14 +239,21 @@ public class DealsController : ControllerBase
     [HttpPut("{id:guid}")]
     public async Task<ActionResult<DealDto>> UpdateDeal(Guid id, [FromBody] UpdateDealRequest request)
     {
-        var agentId = GetCurrentAgentId();
+        var agentId = _orgContext.GetCurrentAgentId();
+        var orgId = _orgContext.GetCurrentOrganizationId();
+        var role = _orgContext.GetCurrentRole();
+
         var deal = await _context.Deals
             .Include(d => d.TimelineSteps.OrderBy(t => t.Order))
             .Include(d => d.Documents)
-            .FirstOrDefaultAsync(d => d.Id == id && d.AgentId == agentId);
+            .FirstOrDefaultAsync(d => d.Id == id && d.OrganizationId == orgId);
 
         if (deal == null)
             return NotFound(new { error = "Deal not found" });
+
+        // Employees can only update deals assigned to them
+        if (role == Role.Employee && deal.AssignedToAgentId != agentId)
+            return Forbid();
 
         if (request.ClientName != null) deal.ClientName = request.ClientName;
         if (request.ClientEmail != null) deal.ClientEmail = request.ClientEmail;
@@ -244,11 +274,18 @@ public class DealsController : ControllerBase
     [HttpDelete("{id:guid}")]
     public async Task<ActionResult> DeleteDeal(Guid id)
     {
-        var agentId = GetCurrentAgentId();
-        var deal = await _context.Deals.FirstOrDefaultAsync(d => d.Id == id && d.AgentId == agentId);
+        var agentId = _orgContext.GetCurrentAgentId();
+        var orgId = _orgContext.GetCurrentOrganizationId();
+        var role = _orgContext.GetCurrentRole();
+
+        var deal = await _context.Deals.FirstOrDefaultAsync(d => d.Id == id && d.OrganizationId == orgId);
 
         if (deal == null)
             return NotFound(new { error = "Deal not found" });
+
+        // Employees can only delete deals assigned to them
+        if (role == Role.Employee && deal.AssignedToAgentId != agentId)
+            return Forbid();
 
         _context.Deals.Remove(deal);
         await _context.SaveChangesAsync();
