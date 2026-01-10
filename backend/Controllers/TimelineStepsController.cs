@@ -86,7 +86,8 @@ public class TimelineStepsController : ControllerBase
             Title = request.Title,
             Description = request.Description,
             DueDate = request.DueDate,
-            Order = request.Order ?? maxOrder + 1
+            Order = request.Order ?? maxOrder + 1,
+            LastActivityAt = DateTime.UtcNow
         };
 
         _context.TimelineSteps.Add(step);
@@ -117,12 +118,21 @@ public class TimelineStepsController : ControllerBase
         if (request.Order.HasValue) step.Order = request.Order.Value;
         if (request.Status != null && Enum.TryParse<StepStatus>(request.Status, true, out var status))
         {
+            // Track StartedAt when transitioning to InProgress
+            if (status == StepStatus.InProgress && step.StartedAt == null)
+            {
+                step.StartedAt = DateTime.UtcNow;
+            }
+
             step.Status = status;
             if (status == StepStatus.Completed && step.CompletedAt == null)
             {
                 step.CompletedAt = DateTime.UtcNow;
             }
         }
+
+        // Always update LastActivityAt on any modification
+        step.LastActivityAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
 
