@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using EstateFlow.Api.Data;
 using EstateFlow.Api.Data.Entities;
+using EstateFlow.Api.Services;
 
 namespace EstateFlow.Api.Controllers;
 
@@ -13,10 +14,12 @@ namespace EstateFlow.Api.Controllers;
 public class AgentsController : ControllerBase
 {
     private readonly EstateFlowDbContext _context;
+    private readonly IDashboardService _dashboardService;
 
-    public AgentsController(EstateFlowDbContext context)
+    public AgentsController(EstateFlowDbContext context, IDashboardService dashboardService)
     {
         _context = context;
+        _dashboardService = dashboardService;
     }
 
     private Guid GetCurrentAgentId()
@@ -96,6 +99,23 @@ public class AgentsController : ControllerBase
             activeDeals,
             completedDeals
         });
+    }
+
+    [HttpGet("me/dashboard")]
+    public async Task<ActionResult<AgentDashboardDto>> GetDashboard()
+    {
+        var agentId = GetCurrentAgentId();
+        var orgIdClaim = User.FindFirstValue("org_id");
+
+        if (string.IsNullOrEmpty(orgIdClaim))
+        {
+            return BadRequest("Agent is not part of an organization");
+        }
+
+        var orgId = Guid.Parse(orgIdClaim);
+        var dashboard = await _dashboardService.GetAgentDashboardAsync(agentId, orgId);
+
+        return Ok(dashboard);
     }
 
     private static AgentDto ToDto(Agent agent) => new(
