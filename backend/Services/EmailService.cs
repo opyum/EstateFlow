@@ -175,9 +175,14 @@ public class EmailService : IEmailService
 
     private async Task SendEmailAsync(string toEmail, string subject, string htmlBody)
     {
+        Console.WriteLine($"[EmailService] Attempting to send email to {toEmail}");
+        Console.WriteLine($"[EmailService] From: {_fromEmail}");
+        Console.WriteLine($"[EmailService] API Key present: {!string.IsNullOrEmpty(_apiKey)}, starts with re_: {_apiKey?.StartsWith("re_") ?? false}");
+
         if (string.IsNullOrEmpty(_apiKey) || _apiKey.StartsWith("re_xxxxx"))
         {
             _logger.LogWarning("Resend API key not configured. Email would be sent to {Email}: {Subject}", toEmail, subject);
+            Console.WriteLine($"[EmailService] SKIPPED: API key not configured properly");
             return;
         }
 
@@ -200,16 +205,24 @@ public class EmailService : IEmailService
                 "application/json"
             );
 
+            Console.WriteLine($"[EmailService] Sending request to Resend API...");
             var response = await _httpClient.SendAsync(request);
+            var responseBody = await response.Content.ReadAsStringAsync();
+
             if (!response.IsSuccessStatusCode)
             {
-                var error = await response.Content.ReadAsStringAsync();
-                _logger.LogError("Failed to send email: {Error}", error);
+                _logger.LogError("Failed to send email to {Email}: {StatusCode} - {Error}", toEmail, response.StatusCode, responseBody);
+                Console.WriteLine($"[EmailService] FAILED: {response.StatusCode} - {responseBody}");
+            }
+            else
+            {
+                Console.WriteLine($"[EmailService] SUCCESS: Email sent to {toEmail}. Response: {responseBody}");
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error sending email to {Email}", toEmail);
+            Console.WriteLine($"[EmailService] EXCEPTION: {ex.Message}");
         }
     }
 }
