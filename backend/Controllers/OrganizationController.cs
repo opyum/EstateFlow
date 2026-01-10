@@ -298,8 +298,27 @@ public class OrganizationController : ControllerBase
         var stripeSecretKey = Environment.GetEnvironmentVariable("STRIPE_SECRET_KEY");
         var stripeSeatPriceId = Environment.GetEnvironmentVariable("STRIPE_SEAT_PRICE_ID");
 
-        if (string.IsNullOrEmpty(stripeSecretKey) || string.IsNullOrEmpty(stripeSeatPriceId) || string.IsNullOrEmpty(org.StripeSubscriptionId))
-            return true; // Skip if not configured
+        if (string.IsNullOrEmpty(stripeSecretKey) || string.IsNullOrEmpty(stripeSeatPriceId))
+            return true; // Skip if Stripe not configured
+
+        // If organization doesn't have Stripe data, sync from admin agent
+        if (string.IsNullOrEmpty(org.StripeSubscriptionId))
+        {
+            var adminMember = await _context.OrganizationMembers
+                .Include(m => m.Agent)
+                .FirstOrDefaultAsync(m => m.OrganizationId == org.Id && m.Role == Role.Admin);
+
+            if (adminMember?.Agent?.StripeSubscriptionId != null)
+            {
+                org.StripeSubscriptionId = adminMember.Agent.StripeSubscriptionId;
+                org.StripeCustomerId = adminMember.Agent.StripeCustomerId;
+                await _context.SaveChangesAsync();
+            }
+            else
+            {
+                return true; // No subscription to add seat to
+            }
+        }
 
         try
         {
@@ -334,8 +353,27 @@ public class OrganizationController : ControllerBase
         var stripeSecretKey = Environment.GetEnvironmentVariable("STRIPE_SECRET_KEY");
         var stripeSeatPriceId = Environment.GetEnvironmentVariable("STRIPE_SEAT_PRICE_ID");
 
-        if (string.IsNullOrEmpty(stripeSecretKey) || string.IsNullOrEmpty(stripeSeatPriceId) || string.IsNullOrEmpty(org.StripeSubscriptionId))
+        if (string.IsNullOrEmpty(stripeSecretKey) || string.IsNullOrEmpty(stripeSeatPriceId))
             return;
+
+        // If organization doesn't have Stripe data, sync from admin agent
+        if (string.IsNullOrEmpty(org.StripeSubscriptionId))
+        {
+            var adminMember = await _context.OrganizationMembers
+                .Include(m => m.Agent)
+                .FirstOrDefaultAsync(m => m.OrganizationId == org.Id && m.Role == Role.Admin);
+
+            if (adminMember?.Agent?.StripeSubscriptionId != null)
+            {
+                org.StripeSubscriptionId = adminMember.Agent.StripeSubscriptionId;
+                org.StripeCustomerId = adminMember.Agent.StripeCustomerId;
+                await _context.SaveChangesAsync();
+            }
+            else
+            {
+                return; // No subscription to remove seat from
+            }
+        }
 
         try
         {
