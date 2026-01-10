@@ -196,7 +196,7 @@ public class StripeController : ControllerBase
                         }
                         else if (priceId == _stripeSeatPriceId)
                         {
-                            seatCount = (int)(item.Quantity ?? 0);
+                            seatCount = (int)item.Quantity;
                             // Get actual seat price from Stripe if available
                             if (item.Price?.UnitAmountDecimal.HasValue == true)
                             {
