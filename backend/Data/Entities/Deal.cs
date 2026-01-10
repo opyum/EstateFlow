@@ -20,6 +20,15 @@ public class Deal
     [Column("agent_id")]
     public Guid AgentId { get; set; }
 
+    [Column("organization_id")]
+    public Guid OrganizationId { get; set; }
+
+    [Column("assigned_to_agent_id")]
+    public Guid? AssignedToAgentId { get; set; }
+
+    [Column("created_by_agent_id")]
+    public Guid? CreatedByAgentId { get; set; }
+
     [Required]
     [Column("client_name")]
     [MaxLength(255)]
@@ -59,6 +68,15 @@ public class Deal
     // Navigation
     [ForeignKey("AgentId")]
     public Agent Agent { get; set; } = null!;
+
+    [ForeignKey("OrganizationId")]
+    public Organization Organization { get; set; } = null!;
+
+    [ForeignKey("AssignedToAgentId")]
+    public Agent? AssignedToAgent { get; set; }
+
+    [ForeignKey("CreatedByAgentId")]
+    public Agent? CreatedByAgent { get; set; }
 
     public ICollection<TimelineStep> TimelineSteps { get; set; } = new List<TimelineStep>();
     public ICollection<Document> Documents { get; set; } = new List<Document>();
