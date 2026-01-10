@@ -111,3 +111,39 @@ http://72.62.181.156:3000/api/deploy/compose/{compose-id}
 ### Monitoring
 - Dokploy dashboard: Logs, Deployments, Monitoring tabs
 - Health check: https://api.estateflow.cloud/health
+
+## Multi-Tenant Architecture
+
+### Roles
+- **Admin**: Full access including Stripe billing, member management, branding
+- **TeamLead**: View all deals, reassign deals, access team dashboard, no billing access
+- **Employee**: Only their assigned deals, core features only
+
+### Key Entities
+- **Organization**: Owns deals and Stripe subscription, has branding (color, logo)
+- **OrganizationMember**: Links Agents to Organizations with Role
+- **Invitation**: Pending team invites with token, expires in 7 days
+
+### API Authorization
+- JWT includes `org_id` and `role` claims
+- Use `[RequireAdmin]` or `[RequireTeamLeadOrAbove]` attributes on endpoints
+- `IOrganizationContextService` provides current organization context
+
+### Pricing Model
+- Base subscription: 49€/month (includes Admin)
+- Additional seat: 10€/month per invited member
+- Stripe uses quantity-based pricing for seats
+
+### New Endpoints
+- `GET/PUT /api/organization` - Organization CRUD
+- `GET /api/organization/members` - List members
+- `POST /api/organization/invite` - Invite member (adds Stripe seat)
+- `DELETE /api/organization/members/{id}` - Remove member (removes Stripe seat)
+- `GET/PUT /api/organization/deals` - Team deal management
+- `GET /api/invite/{token}` - Get invite info
+- `POST /api/invite/{token}/accept` - Accept invitation
+
+### Frontend Routes
+- `/dashboard/team` - Team dashboard (Admin, TeamLead)
+- `/dashboard/team/members` - Member management (Admin only)
+- `/invite/[token]` - Accept invitation (public)
