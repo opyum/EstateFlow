@@ -6,4 +6,5 @@ public interface IEmailService
     Task SendNewDealEmailAsync(string toEmail, string clientName, string dealUrl, string agentName);
     Task SendStepUpdateEmailAsync(string toEmail, string clientName, string stepTitle, string stepStatus, string dealUrl);
     Task SendNewDocumentEmailAsync(string toEmail, string clientName, string documentName, string dealUrl);
+    Task SendInvitationEmailAsync(string toEmail, string organizationName, string role, string inviteUrl);
 }

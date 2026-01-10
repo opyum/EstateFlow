@@ -141,6 +141,38 @@ public class EmailService : IEmailService
         await SendEmailAsync(toEmail, subject, html);
     }
 
+    public async Task SendInvitationEmailAsync(string toEmail, string organizationName, string role, string inviteUrl)
+    {
+        if (string.IsNullOrEmpty(_apiKey) || !_apiKey.StartsWith("re_"))
+        {
+            Console.WriteLine($"[DEV] Invitation email to {toEmail}:");
+            Console.WriteLine($"      Organization: {organizationName}");
+            Console.WriteLine($"      Role: {role}");
+            Console.WriteLine($"      Link: {inviteUrl}");
+            return;
+        }
+
+        var safeOrgName = HtmlEncode(organizationName);
+        var safeRole = HtmlEncode(role);
+        var safeUrl = SafeUrl(inviteUrl);
+
+        var subject = $"Invitation to join {safeOrgName} on EstateFlow";
+        var html = $@"
+            <div style='font-family: sans-serif; max-width: 600px; margin: 0 auto;'>
+                <h2>You're invited!</h2>
+                <p>You've been invited to join <strong>{safeOrgName}</strong> on EstateFlow as a <strong>{safeRole}</strong>.</p>
+                <p style='margin: 30px 0;'>
+                    <a href='{safeUrl}' style='background: #1a1a2e; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;'>
+                        Accept Invitation
+                    </a>
+                </p>
+                <p style='color: #666; font-size: 14px;'>This invitation expires in 7 days.</p>
+            </div>
+        ";
+
+        await SendEmailAsync(toEmail, subject, html);
+    }
+
     private async Task SendEmailAsync(string toEmail, string subject, string htmlBody)
     {
         if (string.IsNullOrEmpty(_apiKey) || _apiKey.StartsWith("re_xxxxx"))
