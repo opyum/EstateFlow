@@ -66,4 +66,5 @@ public class Agent
     // Navigation
     public ICollection<Deal> Deals { get; set; } = new List<Deal>();
     public ICollection<MagicLink> MagicLinks { get; set; } = new List<MagicLink>();
+    public ICollection<OrganizationMember> OrganizationMemberships { get; set; } = new List<OrganizationMember>();
 }
