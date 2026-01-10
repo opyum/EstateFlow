@@ -405,6 +405,10 @@ export interface SubscriptionInfo {
   plan: 'monthly' | 'yearly' | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
+  seatCount: number;
+  seatUnitPrice: number;
+  basePrice: number;
+  totalMonthlyAmount: number;
 }
 
 export interface CanCreateDealResponse {

@@ -21,6 +21,8 @@ public class StripeController : ControllerBase
     private readonly string _stripePriceIdYearly;
     private readonly string _frontendUrl;
 
+    private readonly string _stripeSeatPriceId;
+
     public StripeController(EstateFlowDbContext context, ILogger<StripeController> logger)
     {
         _context = context;
@@ -29,6 +31,7 @@ public class StripeController : ControllerBase
         _stripeWebhookSecret = Environment.GetEnvironmentVariable("STRIPE_WEBHOOK_SECRET") ?? "";
         _stripePriceIdMonthly = Environment.GetEnvironmentVariable("STRIPE_PRICE_ID_MONTHLY") ?? "";
         _stripePriceIdYearly = Environment.GetEnvironmentVariable("STRIPE_PRICE_ID_YEARLY") ?? "";
+        _stripeSeatPriceId = Environment.GetEnvironmentVariable("STRIPE_SEAT_PRICE_ID") ?? "";
         _frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:3000";
 
         StripeConfiguration.ApiKey = _stripeSecretKey;
@@ -47,7 +50,11 @@ public class StripeController : ControllerBase
         string Status,
         string? Plan,
         DateTime? CurrentPeriodEnd,
-        bool CancelAtPeriodEnd
+        bool CancelAtPeriodEnd,
+        int SeatCount,
+        decimal SeatUnitPrice,
+        decimal BasePrice,
+        decimal TotalMonthlyAmount
     );
 
     [HttpPost("checkout")]
@@ -146,7 +153,11 @@ public class StripeController : ControllerBase
                 Status: "trial",
                 Plan: null,
                 CurrentPeriodEnd: null,
-                CancelAtPeriodEnd: false
+                CancelAtPeriodEnd: false,
+                SeatCount: 0,
+                SeatUnitPrice: 10m,
+                BasePrice: 49m,
+                TotalMonthlyAmount: 0m
             ));
         }
 
@@ -156,27 +167,62 @@ public class StripeController : ControllerBase
             try
             {
                 var subscriptionService = new SubscriptionService();
-                var subscription = await subscriptionService.GetAsync(agent.StripeSubscriptionId);
-
-                // Determine plan from price
-                string? plan = null;
-                if (subscription.Items?.Data?.Count > 0)
+                var subscription = await subscriptionService.GetAsync(agent.StripeSubscriptionId, new SubscriptionGetOptions
                 {
-                    var priceId = subscription.Items.Data[0].Price?.Id;
-                    if (priceId == _stripePriceIdMonthly) plan = "monthly";
-                    else if (priceId == _stripePriceIdYearly) plan = "yearly";
+                    Expand = new List<string> { "items.data.price" }
+                });
+
+                // Determine plan and extract seat info from subscription items
+                string? plan = null;
+                int seatCount = 0;
+                decimal seatUnitPrice = 10m;
+                decimal basePrice = 49m;
+
+                if (subscription.Items?.Data != null)
+                {
+                    foreach (var item in subscription.Items.Data)
+                    {
+                        var priceId = item.Price?.Id;
+
+                        if (priceId == _stripePriceIdMonthly)
+                        {
+                            plan = "monthly";
+                            basePrice = 49m;
+                        }
+                        else if (priceId == _stripePriceIdYearly)
+                        {
+                            plan = "yearly";
+                            basePrice = 470m / 12m; // Monthly equivalent
+                        }
+                        else if (priceId == _stripeSeatPriceId)
+                        {
+                            seatCount = (int)(item.Quantity ?? 0);
+                            // Get actual seat price from Stripe if available
+                            if (item.Price?.UnitAmountDecimal.HasValue == true)
+                            {
+                                seatUnitPrice = item.Price.UnitAmountDecimal.Value / 100m;
+                            }
+                        }
+                    }
                 }
+
+                // Calculate total monthly amount
+                decimal totalMonthly = basePrice + (seatCount * seatUnitPrice);
 
                 return Ok(new SubscriptionResponse(
                     Status: subscription.Status,
                     Plan: plan,
                     CurrentPeriodEnd: subscription.CurrentPeriodEnd,
-                    CancelAtPeriodEnd: subscription.CancelAtPeriodEnd
+                    CancelAtPeriodEnd: subscription.CancelAtPeriodEnd,
+                    SeatCount: seatCount,
+                    SeatUnitPrice: seatUnitPrice,
+                    BasePrice: basePrice,
+                    TotalMonthlyAmount: totalMonthly
                 ));
             }
-            catch (StripeException)
+            catch (StripeException ex)
             {
-                // Subscription may have been deleted
+                _logger.LogError(ex, "Error fetching subscription from Stripe");
             }
         }
 
@@ -184,7 +230,11 @@ public class StripeController : ControllerBase
             Status: agent.SubscriptionStatus.ToString().ToLower(),
             Plan: null,
             CurrentPeriodEnd: null,
-            CancelAtPeriodEnd: false
+            CancelAtPeriodEnd: false,
+            SeatCount: 0,
+            SeatUnitPrice: 10m,
+            BasePrice: 49m,
+            TotalMonthlyAmount: 0m
         ));
     }
 

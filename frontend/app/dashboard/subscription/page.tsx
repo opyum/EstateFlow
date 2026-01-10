@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { stripeApi, SubscriptionInfo } from '@/lib/api';
-import { CreditCard, Check, Sparkles } from 'lucide-react';
+import { CreditCard, Check, Sparkles, Users, Diamond, ExternalLink, Info } from 'lucide-react';
+import Link from 'next/link';
 
 export default function SubscriptionPage() {
   const { token, agent } = useAuth();
@@ -72,6 +73,13 @@ export default function SubscriptionPage() {
     });
   };
 
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('fr-FR', {
+      style: 'currency',
+      currency: 'EUR',
+    }).format(amount);
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -81,46 +89,133 @@ export default function SubscriptionPage() {
         </p>
       </div>
 
-      {/* Current status */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Statut actuel</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <CreditCard className="h-8 w-8 text-muted-foreground" />
-              <div>
-                <p className="font-medium">
-                  EstateFlow {isActive ? 'Pro' : 'Essai'}
-                </p>
-                {subscription?.plan && (
-                  <p className="text-sm text-muted-foreground">
-                    {subscription.plan === 'monthly' ? '49 EUR / mois' : '470 EUR / an'}
-                  </p>
-                )}
-                {subscription?.currentPeriodEnd && (
-                  <p className="text-xs text-muted-foreground">
-                    {subscription.cancelAtPeriodEnd
-                      ? `Expire le ${formatDate(subscription.currentPeriodEnd)}`
-                      : `Renouvellement le ${formatDate(subscription.currentPeriodEnd)}`
-                    }
-                  </p>
-                )}
+      {/* Billing Summary - only show for active subscribers */}
+      {isActive && subscription && (
+        <Card className="border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5 text-primary" />
+                <CardTitle>Recapitulatif de facturation</CardTitle>
+              </div>
+              {agent && getStatusBadge(agent.subscriptionStatus)}
+            </div>
+            <CardDescription>
+              Votre facturation mensuelle detaillee
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Line Items */}
+            <div className="space-y-4">
+              {/* Base Plan */}
+              <div className="flex items-start justify-between py-3 border-b">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-full bg-primary/10 p-2">
+                    <Diamond className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-medium">EstateFlow Pro</p>
+                    <p className="text-sm text-muted-foreground">
+                      Abonnement {subscription.plan === 'yearly' ? 'annuel' : 'mensuel'} de base
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="font-semibold">{formatCurrency(subscription.basePrice)}</p>
+                  <p className="text-xs text-muted-foreground">/ mois</p>
+                </div>
+              </div>
+
+              {/* Team Seats - only show if there are seats */}
+              {subscription.seatCount > 0 && (
+                <div className="flex items-start justify-between py-3 border-b">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-full bg-blue-500/10 p-2">
+                      <Users className="h-4 w-4 text-blue-500" />
+                    </div>
+                    <div>
+                      <p className="font-medium">Sieges equipe</p>
+                      <p className="text-sm text-muted-foreground">
+                        {subscription.seatCount} {subscription.seatCount === 1 ? 'membre' : 'membres'} x {formatCurrency(subscription.seatUnitPrice)} / mois
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold">{formatCurrency(subscription.seatCount * subscription.seatUnitPrice)}</p>
+                    <p className="text-xs text-muted-foreground">/ mois</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Total */}
+              <div className="flex items-center justify-between pt-2">
+                <div>
+                  <p className="text-lg font-bold">Total mensuel</p>
+                  {subscription?.currentPeriodEnd && (
+                    <p className="text-sm text-muted-foreground">
+                      {subscription.cancelAtPeriodEnd
+                        ? `Expire le ${formatDate(subscription.currentPeriodEnd)}`
+                        : `Prochain renouvellement le ${formatDate(subscription.currentPeriodEnd)}`
+                      }
+                    </p>
+                  )}
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-primary">{formatCurrency(subscription.totalMonthlyAmount)}</p>
+                </div>
               </div>
             </div>
-            {agent && getStatusBadge(agent.subscriptionStatus)}
-          </div>
 
-          {isActive && (
-            <div className="mt-6">
-              <Button onClick={handleManage} disabled={isLoading}>
+            {/* Actions */}
+            <div className="flex flex-col sm:flex-row gap-3 pt-4">
+              <Button onClick={handleManage} disabled={isLoading} className="flex-1">
                 {isLoading ? 'Chargement...' : 'Gerer mon abonnement'}
+                <ExternalLink className="h-4 w-4 ml-2" />
+              </Button>
+              <Button variant="outline" asChild className="flex-1">
+                <Link href="/dashboard/team/members">
+                  <Users className="h-4 w-4 mr-2" />
+                  Gerer l'equipe
+                </Link>
               </Button>
             </div>
-          )}
-        </CardContent>
-      </Card>
+
+            {/* Info Box */}
+            <div className="flex items-start gap-3 p-4 rounded-lg bg-muted/50">
+              <Info className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+              <div className="text-sm text-muted-foreground">
+                <p className="font-medium text-foreground mb-1">Comment fonctionne la facturation ?</p>
+                <p>
+                  Votre abonnement EstateFlow Pro est de {formatCurrency(subscription.basePrice)}/mois.
+                  Chaque membre invite a votre equipe ajoute {formatCurrency(subscription.seatUnitPrice)}/mois.
+                  Les ajouts et suppressions de sieges sont calcules au prorata.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Current status - simplified for active users */}
+      {isActive && !subscription && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Statut actuel</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <CreditCard className="h-8 w-8 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">EstateFlow Pro</p>
+                  <p className="text-sm text-muted-foreground">Chargement...</p>
+                </div>
+              </div>
+              {agent && getStatusBadge(agent.subscriptionStatus)}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Pricing - only show if not active */}
       {!isActive && (
@@ -178,6 +273,14 @@ export default function SubscriptionPage() {
               )}
             </div>
 
+            {/* Seat pricing info */}
+            <div className="text-center mb-6 p-3 bg-muted/50 rounded-lg">
+              <p className="text-sm text-muted-foreground">
+                <Users className="h-4 w-4 inline mr-1" />
+                Sieges supplementaires : <span className="font-medium text-foreground">10 EUR / mois</span> par membre
+              </p>
+            </div>
+
             <Button onClick={handleSubscribe} disabled={isLoading} className="w-full" size="lg">
               {isLoading ? 'Chargement...' : `S'abonner - ${selectedPlan === 'monthly' ? '49 EUR/mois' : '470 EUR/an'}`}
             </Button>
@@ -200,6 +303,7 @@ export default function SubscriptionPage() {
               'Coffre-fort documents',
               'Timeline interactive',
               'Acces client securise',
+              'Gestion d\'equipe multi-membres',
               'Support prioritaire',
             ].map((feature) => (
               <li key={feature} className="flex items-center gap-2">
@@ -246,6 +350,12 @@ export default function SubscriptionPage() {
             <p className="font-medium">Puis-je changer de formule ?</p>
             <p className="text-sm text-muted-foreground">
               Oui, vous pouvez passer du mensuel a l'annuel (ou inversement) via le portail de gestion.
+            </p>
+          </div>
+          <div>
+            <p className="font-medium">Comment fonctionne la facturation des sieges ?</p>
+            <p className="text-sm text-muted-foreground">
+              Chaque membre invite a votre equipe ajoute 10 EUR/mois. Les ajouts/suppressions sont calcules au prorata de votre cycle de facturation.
             </p>
           </div>
           <div>
