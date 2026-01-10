@@ -213,7 +213,11 @@ public class DealsController : ControllerBase
                             DealId = deal.Id,
                             Title = step.Title,
                             Description = step.Description,
-                            Order = step.Order
+                            Order = step.Order,
+                            ExpectedDurationDays = step.ExpectedDurationDays ?? 14,
+                            InactivityWarningDays = step.InactivityWarningDays ?? 5,
+                            InactivityCriticalDays = step.InactivityCriticalDays ?? 10,
+                            LastActivityAt = DateTime.UtcNow
                         };
                         _context.TimelineSteps.Add(timelineStep);
                     }
@@ -311,5 +315,12 @@ public class DealsController : ControllerBase
         )).ToList()
     );
 
-    private record TemplateStep(string Title, string? Description, int Order);
+    private record TemplateStep(
+        string Title,
+        string? Description,
+        int Order,
+        int? ExpectedDurationDays = null,
+        int? InactivityWarningDays = null,
+        int? InactivityCriticalDays = null
+    );
 }
