@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
-import { Home, FileText, Palette, CreditCard, LogOut } from 'lucide-react';
+import { Home, FileText, Palette, CreditCard, LogOut, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function DashboardLayout({
@@ -14,7 +14,7 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { token, agent, isLoading, logout } = useAuth();
+  const { token, agent, isLoading, logout, isTeamLeadOrAbove } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -47,6 +47,9 @@ export default function DashboardLayout({
     { href: '/dashboard/branding', label: 'Branding', icon: Palette },
     { href: '/dashboard/subscription', label: 'Abonnement', icon: CreditCard },
   ];
+
+  // Add team link for Admin and TeamLead roles
+  const teamNavItem = { href: '/dashboard/team', label: 'Equipe', icon: Users };
 
   return (
     <div className="min-h-screen bg-cream">
@@ -113,6 +116,27 @@ export default function DashboardLayout({
                   </Link>
                 );
               })}
+
+              {/* Team link - only visible for Admin and TeamLead */}
+              {isTeamLeadOrAbove() && (
+                <Link
+                  href={teamNavItem.href}
+                  className={cn(
+                    'flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-200',
+                    pathname === teamNavItem.href || pathname.startsWith(teamNavItem.href + '/')
+                      ? 'bg-gold/10 text-gold border-l-2 border-gold'
+                      : 'text-taupe hover:text-charcoal hover:bg-beige/50'
+                  )}
+                >
+                  <teamNavItem.icon className={cn(
+                    'h-5 w-5 transition-colors',
+                    pathname === teamNavItem.href || pathname.startsWith(teamNavItem.href + '/')
+                      ? 'text-gold'
+                      : 'text-taupe'
+                  )} />
+                  {teamNavItem.label}
+                </Link>
+              )}
             </nav>
           </motion.aside>
 
