@@ -301,22 +301,40 @@ public class OrganizationController : ControllerBase
         if (string.IsNullOrEmpty(stripeSecretKey) || string.IsNullOrEmpty(stripeSeatPriceId))
             return true; // Skip if Stripe not configured
 
-        // If organization doesn't have Stripe data, sync from admin agent
+        StripeConfiguration.ApiKey = stripeSecretKey;
+
+        // If organization doesn't have Stripe data, sync from admin agent's Stripe customer
         if (string.IsNullOrEmpty(org.StripeSubscriptionId))
         {
             var adminMember = await _context.OrganizationMembers
                 .Include(m => m.Agent)
                 .FirstOrDefaultAsync(m => m.OrganizationId == org.Id && m.Role == Role.Admin);
 
-            if (adminMember?.Agent?.StripeSubscriptionId != null)
+            var customerId = adminMember?.Agent?.StripeCustomerId;
+            if (!string.IsNullOrEmpty(customerId))
             {
-                org.StripeSubscriptionId = adminMember.Agent.StripeSubscriptionId;
-                org.StripeCustomerId = adminMember.Agent.StripeCustomerId;
-                await _context.SaveChangesAsync();
+                // Fetch subscription from Stripe using customer ID
+                var subscriptionService = new SubscriptionService();
+                var subscriptions = await subscriptionService.ListAsync(new SubscriptionListOptions
+                {
+                    Customer = customerId,
+                    Limit = 1
+                });
+
+                if (subscriptions.Data.Count > 0)
+                {
+                    org.StripeSubscriptionId = subscriptions.Data[0].Id;
+                    org.StripeCustomerId = customerId;
+                    await _context.SaveChangesAsync();
+                }
+                else
+                {
+                    return true; // Customer has no active subscription
+                }
             }
             else
             {
-                return true; // No subscription to add seat to
+                return true; // No Stripe customer to add seat to
             }
         }
 
@@ -356,28 +374,45 @@ public class OrganizationController : ControllerBase
         if (string.IsNullOrEmpty(stripeSecretKey) || string.IsNullOrEmpty(stripeSeatPriceId))
             return;
 
-        // If organization doesn't have Stripe data, sync from admin agent
+        StripeConfiguration.ApiKey = stripeSecretKey;
+
+        // If organization doesn't have Stripe data, sync from admin agent's Stripe customer
         if (string.IsNullOrEmpty(org.StripeSubscriptionId))
         {
             var adminMember = await _context.OrganizationMembers
                 .Include(m => m.Agent)
                 .FirstOrDefaultAsync(m => m.OrganizationId == org.Id && m.Role == Role.Admin);
 
-            if (adminMember?.Agent?.StripeSubscriptionId != null)
+            var customerId = adminMember?.Agent?.StripeCustomerId;
+            if (!string.IsNullOrEmpty(customerId))
             {
-                org.StripeSubscriptionId = adminMember.Agent.StripeSubscriptionId;
-                org.StripeCustomerId = adminMember.Agent.StripeCustomerId;
-                await _context.SaveChangesAsync();
+                // Fetch subscription from Stripe using customer ID
+                var subscriptionService = new SubscriptionService();
+                var subscriptions = await subscriptionService.ListAsync(new SubscriptionListOptions
+                {
+                    Customer = customerId,
+                    Limit = 1
+                });
+
+                if (subscriptions.Data.Count > 0)
+                {
+                    org.StripeSubscriptionId = subscriptions.Data[0].Id;
+                    org.StripeCustomerId = customerId;
+                    await _context.SaveChangesAsync();
+                }
+                else
+                {
+                    return; // Customer has no active subscription
+                }
             }
             else
             {
-                return; // No subscription to remove seat from
+                return; // No Stripe customer to remove seat from
             }
         }
 
         try
         {
-            StripeConfiguration.ApiKey = stripeSecretKey;
             var subscriptionService = new SubscriptionService();
             var subscription = await subscriptionService.GetAsync(org.StripeSubscriptionId);
             var seatItem = subscription.Items.Data.FirstOrDefault(i => i.Price.Id == stripeSeatPriceId);
