@@ -17,15 +17,18 @@ public class OrganizationController : ControllerBase
     private readonly EstateFlowDbContext _context;
     private readonly IOrganizationContextService _orgContext;
     private readonly IEmailService _emailService;
+    private readonly IDashboardService _dashboardService;
 
     public OrganizationController(
         EstateFlowDbContext context,
         IOrganizationContextService orgContext,
-        IEmailService emailService)
+        IEmailService emailService,
+        IDashboardService dashboardService)
     {
         _context = context;
         _orgContext = orgContext;
         _emailService = emailService;
+        _dashboardService = dashboardService;
     }
 
     // DTOs
@@ -282,6 +285,36 @@ public class OrganizationController : ControllerBase
         deal.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
         return Ok(new { message = "Deal assigned" });
+    }
+
+    // GET /api/organization/dashboard
+    [HttpGet("dashboard")]
+    [RequireTeamLeadOrAbove]
+    public async Task<ActionResult<OrgDashboardDto>> GetDashboard()
+    {
+        var orgId = _orgContext.GetCurrentOrganizationId();
+        var dashboard = await _dashboardService.GetOrganizationDashboardAsync(orgId);
+        return Ok(dashboard);
+    }
+
+    // GET /api/organization/dashboard/agent/{agentId}
+    [HttpGet("dashboard/agent/{agentId:guid}")]
+    [RequireTeamLeadOrAbove]
+    public async Task<ActionResult<AgentDashboardDto>> GetAgentDashboard(Guid agentId)
+    {
+        var orgId = _orgContext.GetCurrentOrganizationId();
+
+        // Verify the agent is in this organization
+        var member = await _context.OrganizationMembers
+            .FirstOrDefaultAsync(m => m.OrganizationId == orgId && m.AgentId == agentId);
+
+        if (member == null)
+        {
+            return NotFound("Agent not found in organization");
+        }
+
+        var dashboard = await _dashboardService.GetAgentDashboardForOrgAsync(agentId, orgId);
+        return Ok(dashboard);
     }
 
     // Helper methods
