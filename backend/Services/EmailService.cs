@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -19,23 +20,38 @@ public class EmailService : IEmailService
         _fromEmail = Environment.GetEnvironmentVariable("EMAIL_FROM") ?? "noreply@estateflow.com";
     }
 
+    // ========== SECURITY: HTML escape user input to prevent XSS ==========
+    private static string HtmlEncode(string input) => WebUtility.HtmlEncode(input ?? "");
+
+    // ========== SECURITY: Validate and encode URLs ==========
+    private static string SafeUrl(string url)
+    {
+        if (string.IsNullOrEmpty(url)) return "#";
+        // Only allow http/https URLs
+        if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+            !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            return "#";
+        return HtmlEncode(url);
+    }
+
     public async Task SendMagicLinkEmailAsync(string toEmail, string magicLinkUrl)
     {
-        var subject = "Connectez-vous a EstateFlow";
+        var safeUrl = SafeUrl(magicLinkUrl);
+        var subject = "Connectez-vous à EstateFlow";
         var html = $@"
             <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;'>
                 <h1 style='color: #1a1a2e;'>EstateFlow</h1>
                 <p>Bonjour,</p>
-                <p>Cliquez sur le bouton ci-dessous pour vous connecter a votre espace agent :</p>
+                <p>Cliquez sur le bouton ci-dessous pour vous connecter à votre espace agent :</p>
                 <p style='text-align: center; margin: 30px 0;'>
-                    <a href='{magicLinkUrl}'
+                    <a href='{safeUrl}'
                        style='background-color: #1a1a2e; color: white; padding: 12px 30px;
                               text-decoration: none; border-radius: 5px; display: inline-block;'>
                         Se connecter
                     </a>
                 </p>
                 <p style='color: #666; font-size: 14px;'>
-                    Ce lien expire dans 15 minutes. Si vous n'avez pas demande cette connexion, ignorez cet email.
+                    Ce lien expire dans 15 minutes. Si vous n'avez pas demandé cette connexion, ignorez cet email.
                 </p>
             </div>";
 
@@ -44,21 +60,25 @@ public class EmailService : IEmailService
 
     public async Task SendNewDealEmailAsync(string toEmail, string clientName, string dealUrl, string agentName)
     {
-        var subject = $"Bienvenue ! Suivez votre acquisition avec {agentName}";
+        var safeClientName = HtmlEncode(clientName);
+        var safeAgentName = HtmlEncode(agentName);
+        var safeUrl = SafeUrl(dealUrl);
+
+        var subject = $"Bienvenue ! Suivez votre acquisition avec {safeAgentName}";
         var html = $@"
             <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;'>
                 <h1 style='color: #1a1a2e;'>Votre espace de suivi</h1>
-                <p>Bonjour {clientName},</p>
-                <p>{agentName} vous invite a suivre l'avancement de votre transaction immobiliere.</p>
+                <p>Bonjour {safeClientName},</p>
+                <p>{safeAgentName} vous invite à suivre l'avancement de votre transaction immobilière.</p>
                 <p style='text-align: center; margin: 30px 0;'>
-                    <a href='{dealUrl}'
+                    <a href='{safeUrl}'
                        style='background-color: #1a1a2e; color: white; padding: 12px 30px;
                               text-decoration: none; border-radius: 5px; display: inline-block;'>
-                        Acceder a mon dossier
+                        Accéder à mon dossier
                     </a>
                 </p>
                 <p style='color: #666; font-size: 14px;'>
-                    Conservez ce lien precieusement, il vous permettra d'acceder a tout moment a votre dossier.
+                    Conservez ce lien précieusement, il vous permettra d'accéder à tout moment à votre dossier.
                 </p>
             </div>";
 
@@ -67,18 +87,23 @@ public class EmailService : IEmailService
 
     public async Task SendStepUpdateEmailAsync(string toEmail, string clientName, string stepTitle, string stepStatus, string dealUrl)
     {
-        var subject = $"Mise a jour : {stepTitle}";
+        var safeClientName = HtmlEncode(clientName);
+        var safeStepTitle = HtmlEncode(stepTitle);
+        var safeStepStatus = HtmlEncode(stepStatus);
+        var safeUrl = SafeUrl(dealUrl);
+
+        var subject = $"Mise à jour : {safeStepTitle}";
         var html = $@"
             <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;'>
-                <h1 style='color: #1a1a2e;'>Mise a jour de votre dossier</h1>
-                <p>Bonjour {clientName},</p>
-                <p>Une etape de votre dossier a ete mise a jour :</p>
+                <h1 style='color: #1a1a2e;'>Mise à jour de votre dossier</h1>
+                <p>Bonjour {safeClientName},</p>
+                <p>Une étape de votre dossier a été mise à jour :</p>
                 <div style='background: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;'>
-                    <strong>{stepTitle}</strong><br/>
-                    Statut : {stepStatus}
+                    <strong>{safeStepTitle}</strong><br/>
+                    Statut : {safeStepStatus}
                 </div>
                 <p style='text-align: center; margin: 30px 0;'>
-                    <a href='{dealUrl}'
+                    <a href='{safeUrl}'
                        style='background-color: #1a1a2e; color: white; padding: 12px 30px;
                               text-decoration: none; border-radius: 5px; display: inline-block;'>
                         Voir mon dossier
@@ -91,17 +116,21 @@ public class EmailService : IEmailService
 
     public async Task SendNewDocumentEmailAsync(string toEmail, string clientName, string documentName, string dealUrl)
     {
+        var safeClientName = HtmlEncode(clientName);
+        var safeDocumentName = HtmlEncode(documentName);
+        var safeUrl = SafeUrl(dealUrl);
+
         var subject = "Nouveau document disponible";
         var html = $@"
             <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;'>
                 <h1 style='color: #1a1a2e;'>Nouveau document</h1>
-                <p>Bonjour {clientName},</p>
-                <p>Un nouveau document a ete ajoute a votre dossier :</p>
+                <p>Bonjour {safeClientName},</p>
+                <p>Un nouveau document a été ajouté à votre dossier :</p>
                 <div style='background: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;'>
-                    <strong>{documentName}</strong>
+                    <strong>{safeDocumentName}</strong>
                 </div>
                 <p style='text-align: center; margin: 30px 0;'>
-                    <a href='{dealUrl}'
+                    <a href='{safeUrl}'
                        style='background-color: #1a1a2e; color: white; padding: 12px 30px;
                               text-decoration: none; border-radius: 5px; display: inline-block;'>
                         Voir le document

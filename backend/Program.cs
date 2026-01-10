@@ -1,5 +1,7 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using EstateFlow.Api.Data;
@@ -12,16 +14,33 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Database
-var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL")
-    ?? "Host=localhost;Port=5432;Database=estateflow;Username=estateflow;Password=estateflow_dev_password";
-builder.Services.AddDbContext<EstateFlowDbContext>(options =>
-    options.UseNpgsql(connectionString));
+// ========== SECURITY: Validate required environment variables ==========
+var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL");
+var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET");
+var frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL");
 
-// JWT Authentication
-var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? "default_dev_secret_key_minimum_32_chars!!";
+// In development, allow defaults; in production, require all secrets
+if (!builder.Environment.IsDevelopment())
+{
+    if (string.IsNullOrEmpty(connectionString))
+        throw new InvalidOperationException("DATABASE_URL environment variable is required in production");
+    if (string.IsNullOrEmpty(jwtSecret) || jwtSecret.Length < 32)
+        throw new InvalidOperationException("JWT_SECRET environment variable (min 32 chars) is required in production");
+    if (string.IsNullOrEmpty(frontendUrl))
+        throw new InvalidOperationException("FRONTEND_URL environment variable is required in production");
+}
+
+// Development fallbacks (only used when ASPNETCORE_ENVIRONMENT=Development)
+connectionString ??= "Host=localhost;Port=5432;Database=estateflow;Username=estateflow;Password=estateflow_dev_password";
+jwtSecret ??= "default_dev_secret_key_minimum_32_chars!!";
+frontendUrl ??= "http://localhost:3000";
+
 var jwtIssuer = Environment.GetEnvironmentVariable("JWT_ISSUER") ?? "estateflow";
 var jwtAudience = Environment.GetEnvironmentVariable("JWT_AUDIENCE") ?? "estateflow";
+
+// Database
+builder.Services.AddDbContext<EstateFlowDbContext>(options =>
+    options.UseNpgsql(connectionString));
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -45,14 +64,41 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddSingleton<IYousignService, YousignService>();
 
-// CORS
+// ========== SECURITY: Rate Limiting ==========
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    // Global rate limit
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 100,
+                Window = TimeSpan.FromMinutes(1)
+            }));
+
+    // Strict rate limit for auth endpoints
+    options.AddPolicy("auth", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+});
+
+// ========== SECURITY: Restrictive CORS ==========
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins(Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:3000")
-              .AllowAnyHeader()
-              .AllowAnyMethod()
+        policy.WithOrigins(frontendUrl)
+              .WithHeaders("Content-Type", "Authorization", "X-Requested-With")
+              .WithMethods("GET", "POST", "PUT", "DELETE")
               .AllowCredentials();
     });
 });
@@ -76,6 +122,18 @@ static async Task ApplySchemaUpdates(EstateFlowDbContext db)
 
     try
     {
+        // ========== SECURITY: Whitelist of allowed column names to prevent SQL injection ==========
+        var allowedColumns = new HashSet<string>
+        {
+            "signature_request_id", "signature_status", "signed_file_path", "signed_at",
+            "document_id", "downloaded"
+        };
+
+        var allowedTypes = new HashSet<string>
+        {
+            "VARCHAR(100)", "VARCHAR(50)", "VARCHAR(500)", "TIMESTAMP", "UUID", "BOOLEAN DEFAULT FALSE"
+        };
+
         // Check and add missing columns to documents table
         var columnsToAdd = new[]
         {
@@ -87,17 +145,35 @@ static async Task ApplySchemaUpdates(EstateFlowDbContext db)
 
         foreach (var (columnName, columnType) in columnsToAdd)
         {
+            // Validate against whitelist
+            if (!allowedColumns.Contains(columnName) || !allowedTypes.Contains(columnType))
+            {
+                Console.WriteLine($"Skipping invalid column: {columnName}");
+                continue;
+            }
+
             var checkCmd = connection.CreateCommand();
-            checkCmd.CommandText = $@"
+            checkCmd.CommandText = @"
                 SELECT COUNT(*) FROM information_schema.columns
-                WHERE table_name = 'documents' AND column_name = '{columnName}'";
+                WHERE table_name = @tableName AND column_name = @columnName";
+
+            var tableParam = checkCmd.CreateParameter();
+            tableParam.ParameterName = "@tableName";
+            tableParam.Value = "documents";
+            checkCmd.Parameters.Add(tableParam);
+
+            var columnParam = checkCmd.CreateParameter();
+            columnParam.ParameterName = "@columnName";
+            columnParam.Value = columnName;
+            checkCmd.Parameters.Add(columnParam);
 
             var exists = Convert.ToInt32(await checkCmd.ExecuteScalarAsync()) > 0;
 
             if (!exists)
             {
+                // Column names must be quoted identifiers for safety
                 var addCmd = connection.CreateCommand();
-                addCmd.CommandText = $"ALTER TABLE documents ADD COLUMN {columnName} {columnType}";
+                addCmd.CommandText = $"ALTER TABLE documents ADD COLUMN \"{columnName}\" {columnType}";
                 await addCmd.ExecuteNonQueryAsync();
                 Console.WriteLine($"Added missing column: {columnName}");
             }
@@ -121,17 +197,34 @@ static async Task ApplySchemaUpdates(EstateFlowDbContext db)
         {
             foreach (var (columnName, columnType) in dealViewColumns)
             {
+                // Validate against whitelist
+                if (!allowedColumns.Contains(columnName) || !allowedTypes.Contains(columnType))
+                {
+                    Console.WriteLine($"Skipping invalid column: {columnName}");
+                    continue;
+                }
+
                 var checkCmd = connection.CreateCommand();
-                checkCmd.CommandText = $@"
+                checkCmd.CommandText = @"
                     SELECT COUNT(*) FROM information_schema.columns
-                    WHERE table_name = 'deal_views' AND column_name = '{columnName}'";
+                    WHERE table_name = @tableName AND column_name = @columnName";
+
+                var tableParam = checkCmd.CreateParameter();
+                tableParam.ParameterName = "@tableName";
+                tableParam.Value = "deal_views";
+                checkCmd.Parameters.Add(tableParam);
+
+                var columnParam = checkCmd.CreateParameter();
+                columnParam.ParameterName = "@columnName";
+                columnParam.Value = columnName;
+                checkCmd.Parameters.Add(columnParam);
 
                 var exists = Convert.ToInt32(await checkCmd.ExecuteScalarAsync()) > 0;
 
                 if (!exists)
                 {
                     var addCmd = connection.CreateCommand();
-                    addCmd.CommandText = $"ALTER TABLE deal_views ADD COLUMN {columnName} {columnType}";
+                    addCmd.CommandText = $"ALTER TABLE deal_views ADD COLUMN \"{columnName}\" {columnType}";
                     await addCmd.ExecuteNonQueryAsync();
                     Console.WriteLine($"Added missing column to deal_views: {columnName}");
                 }
@@ -151,6 +244,24 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+// ========== SECURITY: Add security headers ==========
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
+    context.Response.Headers.Append("X-Frame-Options", "DENY");
+    context.Response.Headers.Append("X-XSS-Protection", "1; mode=block");
+    context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
+    context.Response.Headers.Append("Permissions-Policy", "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()");
+
+    if (!app.Environment.IsDevelopment())
+    {
+        context.Response.Headers.Append("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    }
+
+    await next();
+});
+
+app.UseRateLimiter();
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();

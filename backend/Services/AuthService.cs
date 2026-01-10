@@ -20,16 +20,33 @@ public class AuthService : IAuthService
     private readonly int _magicLinkExpiryMinutes;
     private readonly string _frontendUrl;
 
-    public AuthService(EstateFlowDbContext context, IEmailService emailService)
+    public AuthService(EstateFlowDbContext context, IEmailService emailService, IWebHostEnvironment environment)
     {
         _context = context;
         _emailService = emailService;
-        _jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? "default_dev_secret_key_minimum_32_chars!!";
+
+        // ========== SECURITY: Require secrets in production ==========
+        _jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? "";
         _jwtIssuer = Environment.GetEnvironmentVariable("JWT_ISSUER") ?? "estateflow";
         _jwtAudience = Environment.GetEnvironmentVariable("JWT_AUDIENCE") ?? "estateflow";
+        _frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "";
+
+        if (!environment.IsDevelopment())
+        {
+            if (string.IsNullOrEmpty(_jwtSecret) || _jwtSecret.Length < 32)
+                throw new InvalidOperationException("JWT_SECRET must be at least 32 characters in production");
+            if (string.IsNullOrEmpty(_frontendUrl))
+                throw new InvalidOperationException("FRONTEND_URL is required in production");
+        }
+        else
+        {
+            // Development fallbacks
+            if (string.IsNullOrEmpty(_jwtSecret)) _jwtSecret = "default_dev_secret_key_minimum_32_chars!!";
+            if (string.IsNullOrEmpty(_frontendUrl)) _frontendUrl = "http://localhost:3000";
+        }
+
         _jwtExpiryHours = int.TryParse(Environment.GetEnvironmentVariable("JWT_EXPIRY_HOURS"), out var h) ? h : 24;
         _magicLinkExpiryMinutes = int.TryParse(Environment.GetEnvironmentVariable("MAGIC_LINK_EXPIRY_MINUTES"), out var m) ? m : 15;
-        _frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:3000";
     }
 
     public async Task<string> GenerateMagicLinkAsync(string email)

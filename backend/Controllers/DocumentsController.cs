@@ -17,6 +17,24 @@ public class DocumentsController : ControllerBase
     private readonly IEmailService _emailService;
     private readonly string _uploadPath;
 
+    // ========== SECURITY: File upload constraints ==========
+    private const long MaxFileSize = 10 * 1024 * 1024; // 10 MB
+    private static readonly HashSet<string> AllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".png", ".jpg", ".jpeg"
+    };
+    private static readonly Dictionary<string, string> AllowedMimeTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { ".pdf", "application/pdf" },
+        { ".doc", "application/msword" },
+        { ".docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
+        { ".xls", "application/vnd.ms-excel" },
+        { ".xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+        { ".png", "image/png" },
+        { ".jpg", "image/jpeg" },
+        { ".jpeg", "image/jpeg" }
+    };
+
     public DocumentsController(EstateFlowDbContext context, IEmailService emailService)
     {
         _context = context;
@@ -52,6 +70,7 @@ public class DocumentsController : ControllerBase
     }
 
     [HttpPost]
+    [RequestSizeLimit(MaxFileSize)]
     public async Task<ActionResult<DocumentDto>> UploadDocument(
         Guid dealId,
         [FromForm] IFormFile file,
@@ -66,6 +85,34 @@ public class DocumentsController : ControllerBase
         if (file == null || file.Length == 0)
             return BadRequest(new { error = "File is required" });
 
+        // ========== SECURITY: Validate file size ==========
+        if (file.Length > MaxFileSize)
+            return BadRequest(new { error = $"File size exceeds maximum allowed ({MaxFileSize / 1024 / 1024} MB)" });
+
+        // ========== SECURITY: Validate file extension ==========
+        var extension = Path.GetExtension(file.FileName)?.ToLowerInvariant();
+        if (string.IsNullOrEmpty(extension) || !AllowedExtensions.Contains(extension))
+            return BadRequest(new { error = "File type not allowed. Allowed: PDF, DOC, DOCX, XLS, XLSX, PNG, JPG" });
+
+        // ========== SECURITY: Validate MIME type matches extension ==========
+        if (AllowedMimeTypes.TryGetValue(extension, out var expectedMimeType))
+        {
+            if (!file.ContentType.Equals(expectedMimeType, StringComparison.OrdinalIgnoreCase))
+            {
+                // Allow some flexibility for JPEG variations
+                if (!(extension is ".jpg" or ".jpeg" && file.ContentType.StartsWith("image/jpeg", StringComparison.OrdinalIgnoreCase)))
+                {
+                    return BadRequest(new { error = "File content does not match extension" });
+                }
+            }
+        }
+
+        // ========== SECURITY: Sanitize filename ==========
+        var safeFilename = Path.GetFileNameWithoutExtension(file.FileName);
+        safeFilename = string.Concat(safeFilename.Where(c => char.IsLetterOrDigit(c) || c == '-' || c == '_' || c == ' '));
+        if (string.IsNullOrEmpty(safeFilename)) safeFilename = "document";
+        safeFilename = safeFilename[..Math.Min(safeFilename.Length, 100)] + extension;
+
         // Parse category
         var docCategory = DocumentCategory.Reference;
         if (!string.IsNullOrEmpty(category) && Enum.TryParse<DocumentCategory>(category, true, out var parsedCategory))
@@ -78,9 +125,14 @@ public class DocumentsController : ControllerBase
         Directory.CreateDirectory(dealFolder);
 
         // Generate unique filename
-        var extension = Path.GetExtension(file.FileName);
         var uniqueName = $"{Guid.NewGuid()}{extension}";
         var filePath = Path.Combine(dealFolder, uniqueName);
+
+        // ========== SECURITY: Verify path is within upload directory ==========
+        var fullPath = Path.GetFullPath(filePath);
+        var fullUploadPath = Path.GetFullPath(_uploadPath);
+        if (!fullPath.StartsWith(fullUploadPath, StringComparison.OrdinalIgnoreCase))
+            return BadRequest(new { error = "Invalid file path" });
 
         // Save file
         using (var stream = new FileStream(filePath, FileMode.Create))
@@ -92,7 +144,7 @@ public class DocumentsController : ControllerBase
         var document = new Document
         {
             DealId = dealId,
-            Filename = file.FileName,
+            Filename = safeFilename,
             FilePath = filePath,
             Category = docCategory
         };
@@ -106,7 +158,7 @@ public class DocumentsController : ControllerBase
         await _emailService.SendNewDocumentEmailAsync(
             deal.ClientEmail,
             deal.ClientName,
-            file.FileName,
+            safeFilename,
             dealUrl
         );
 
@@ -127,10 +179,16 @@ public class DocumentsController : ControllerBase
         if (document == null)
             return NotFound(new { error = "Document not found" });
 
-        if (!System.IO.File.Exists(document.FilePath))
+        // ========== SECURITY: Validate file path is within upload directory ==========
+        var fullPath = Path.GetFullPath(document.FilePath);
+        var fullUploadPath = Path.GetFullPath(_uploadPath);
+        if (!fullPath.StartsWith(fullUploadPath, StringComparison.OrdinalIgnoreCase))
+            return NotFound(new { error = "File not found" });
+
+        if (!System.IO.File.Exists(fullPath))
             return NotFound(new { error = "File not found on server" });
 
-        var bytes = await System.IO.File.ReadAllBytesAsync(document.FilePath);
+        var bytes = await System.IO.File.ReadAllBytesAsync(fullPath);
         var contentType = GetContentType(document.Filename);
 
         return File(bytes, contentType, document.Filename);
