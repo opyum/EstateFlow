@@ -170,12 +170,12 @@ public class EstateFlowDbContext : DbContext
                 Name = "Achat Appartement",
                 Steps = """
                 [
-                    {"title": "Offre acceptee", "description": "Votre offre a ete acceptee par le vendeur", "order": 1},
-                    {"title": "Signature compromis", "description": "Signature du compromis de vente chez le notaire", "order": 2},
-                    {"title": "Depot dossier bancaire", "description": "Envoi du dossier complet a la banque", "order": 3},
-                    {"title": "Accord de pret", "description": "Reception de l'accord definitif de la banque", "order": 4},
-                    {"title": "Levee des conditions suspensives", "description": "Toutes les conditions sont remplies", "order": 5},
-                    {"title": "Signature acte authentique", "description": "Signature finale chez le notaire et remise des cles", "order": 6}
+                    {"title": "Offre acceptee", "description": "Votre offre a ete acceptee par le vendeur", "order": 1, "expectedDurationDays": 7, "inactivityWarningDays": 3, "inactivityCriticalDays": 5},
+                    {"title": "Signature compromis", "description": "Signature du compromis de vente chez le notaire", "order": 2, "expectedDurationDays": 14, "inactivityWarningDays": 5, "inactivityCriticalDays": 10},
+                    {"title": "Depot dossier bancaire", "description": "Envoi du dossier complet a la banque", "order": 3, "expectedDurationDays": 14, "inactivityWarningDays": 5, "inactivityCriticalDays": 10},
+                    {"title": "Accord de pret", "description": "Reception de l'accord definitif de la banque", "order": 4, "expectedDurationDays": 60, "inactivityWarningDays": 14, "inactivityCriticalDays": 30},
+                    {"title": "Levee des conditions suspensives", "description": "Toutes les conditions sont remplies", "order": 5, "expectedDurationDays": 14, "inactivityWarningDays": 5, "inactivityCriticalDays": 10},
+                    {"title": "Signature acte authentique", "description": "Signature finale chez le notaire et remise des cles", "order": 6, "expectedDurationDays": 30, "inactivityWarningDays": 7, "inactivityCriticalDays": 14}
                 ]
                 """
             },
@@ -185,13 +185,13 @@ public class EstateFlowDbContext : DbContext
                 Name = "Vente Maison",
                 Steps = """
                 [
-                    {"title": "Mandat de vente signe", "description": "Le mandat de vente a ete signe", "order": 1},
-                    {"title": "Diagnostics realises", "description": "Tous les diagnostics obligatoires ont ete effectues", "order": 2},
-                    {"title": "Offre recue", "description": "Une offre d'achat a ete recue", "order": 3},
-                    {"title": "Offre acceptee", "description": "L'offre a ete acceptee", "order": 4},
-                    {"title": "Signature compromis", "description": "Signature du compromis de vente", "order": 5},
-                    {"title": "Purge des droits de preemption", "description": "Delai de preemption termine", "order": 6},
-                    {"title": "Signature acte authentique", "description": "Vente finalisee chez le notaire", "order": 7}
+                    {"title": "Mandat de vente signe", "description": "Le mandat de vente a ete signe", "order": 1, "expectedDurationDays": 7, "inactivityWarningDays": 3, "inactivityCriticalDays": 5},
+                    {"title": "Diagnostics realises", "description": "Tous les diagnostics obligatoires ont ete effectues", "order": 2, "expectedDurationDays": 14, "inactivityWarningDays": 5, "inactivityCriticalDays": 10},
+                    {"title": "Offre recue", "description": "Une offre d'achat a ete recue", "order": 3, "expectedDurationDays": 30, "inactivityWarningDays": 7, "inactivityCriticalDays": 14},
+                    {"title": "Offre acceptee", "description": "L'offre a ete acceptee", "order": 4, "expectedDurationDays": 7, "inactivityWarningDays": 3, "inactivityCriticalDays": 5},
+                    {"title": "Signature compromis", "description": "Signature du compromis de vente", "order": 5, "expectedDurationDays": 14, "inactivityWarningDays": 5, "inactivityCriticalDays": 10},
+                    {"title": "Purge des droits de preemption", "description": "Delai de preemption termine", "order": 6, "expectedDurationDays": 60, "inactivityWarningDays": 14, "inactivityCriticalDays": 30},
+                    {"title": "Signature acte authentique", "description": "Vente finalisee chez le notaire", "order": 7, "expectedDurationDays": 30, "inactivityWarningDays": 7, "inactivityCriticalDays": 14}
                 ]
                 """
             },
@@ -201,12 +201,12 @@ public class EstateFlowDbContext : DbContext
                 Name = "Location Prestige",
                 Steps = """
                 [
-                    {"title": "Visite effectuee", "description": "Le bien a ete visite", "order": 1},
-                    {"title": "Dossier locataire valide", "description": "Le dossier du locataire est complet et valide", "order": 2},
-                    {"title": "Bail prepare", "description": "Le contrat de bail est pret", "order": 3},
-                    {"title": "Signature du bail", "description": "Le bail a ete signe par toutes les parties", "order": 4},
-                    {"title": "Etat des lieux entree", "description": "L'etat des lieux d'entree a ete realise", "order": 5},
-                    {"title": "Remise des cles", "description": "Les cles ont ete remises au locataire", "order": 6}
+                    {"title": "Visite effectuee", "description": "Le bien a ete visite", "order": 1, "expectedDurationDays": 3, "inactivityWarningDays": 2, "inactivityCriticalDays": 3},
+                    {"title": "Dossier locataire valide", "description": "Le dossier du locataire est complet et valide", "order": 2, "expectedDurationDays": 7, "inactivityWarningDays": 3, "inactivityCriticalDays": 5},
+                    {"title": "Bail prepare", "description": "Le contrat de bail est pret", "order": 3, "expectedDurationDays": 5, "inactivityWarningDays": 2, "inactivityCriticalDays": 4},
+                    {"title": "Signature du bail", "description": "Le bail a ete signe par toutes les parties", "order": 4, "expectedDurationDays": 7, "inactivityWarningDays": 3, "inactivityCriticalDays": 5},
+                    {"title": "Etat des lieux entree", "description": "L'etat des lieux d'entree a ete realise", "order": 5, "expectedDurationDays": 3, "inactivityWarningDays": 2, "inactivityCriticalDays": 3},
+                    {"title": "Remise des cles", "description": "Les cles ont ete remises au locataire", "order": 6, "expectedDurationDays": 1, "inactivityWarningDays": 1, "inactivityCriticalDays": 2}
                 ]
                 """
             }
