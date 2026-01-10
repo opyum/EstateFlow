@@ -217,6 +217,88 @@ export const stripeApi = {
     }),
 };
 
+// Organization
+export const organizationApi = {
+  get: (token: string) =>
+    apiFetch<Organization>('/api/organization', { token }),
+
+  update: (token: string, data: Partial<Organization>) =>
+    apiFetch<Organization>('/api/organization', {
+      token,
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  getMembers: (token: string) =>
+    apiFetch<OrganizationMember[]>('/api/organization/members', { token }),
+
+  changeMemberRole: (token: string, agentId: string, role: string) =>
+    apiFetch<void>(`/api/organization/members/${agentId}/role`, {
+      token,
+      method: 'PUT',
+      body: JSON.stringify({ role }),
+    }),
+
+  removeMember: (token: string, agentId: string) =>
+    apiFetch<void>(`/api/organization/members/${agentId}`, {
+      token,
+      method: 'DELETE',
+    }),
+
+  transferAdmin: (token: string, newAdminAgentId: string) =>
+    apiFetch<void>('/api/organization/transfer-admin', {
+      token,
+      method: 'POST',
+      body: JSON.stringify({ newAdminAgentId }),
+    }),
+
+  getInvitations: (token: string) =>
+    apiFetch<Invitation[]>('/api/organization/invitations', { token }),
+
+  invite: (token: string, email: string, role: string) =>
+    apiFetch<Invitation>('/api/organization/invite', {
+      token,
+      method: 'POST',
+      body: JSON.stringify({ email, role }),
+    }),
+
+  cancelInvitation: (token: string, id: string) =>
+    apiFetch<void>(`/api/organization/invitations/${id}`, {
+      token,
+      method: 'DELETE',
+    }),
+
+  getTeamDeals: (token: string, assignedTo?: string, status?: string) => {
+    const params = new URLSearchParams();
+    if (assignedTo) params.append('assignedTo', assignedTo);
+    if (status) params.append('status', status);
+    const query = params.toString();
+    return apiFetch<TeamDeal[]>(`/api/organization/deals${query ? `?${query}` : ''}`, { token });
+  },
+
+  getTeamStats: (token: string) =>
+    apiFetch<TeamStats>('/api/organization/stats', { token }),
+
+  assignDeal: (token: string, dealId: string, assignToAgentId: string) =>
+    apiFetch<void>(`/api/organization/deals/${dealId}/assign`, {
+      token,
+      method: 'PUT',
+      body: JSON.stringify({ assignToAgentId }),
+    }),
+};
+
+// Invite (public)
+export const inviteApi = {
+  getInfo: (inviteToken: string) =>
+    apiFetch<InviteInfo>(`/api/invite/${inviteToken}`),
+
+  accept: (inviteToken: string, fullName?: string) =>
+    apiFetch<{ token: string; isNewUser: boolean }>(`/api/invite/${inviteToken}/accept`, {
+      method: 'POST',
+      body: JSON.stringify({ fullName }),
+    }),
+};
+
 // Deals - additional endpoint
 export const dealsApiExtended = {
   canCreate: (token: string) =>
@@ -329,4 +411,58 @@ export interface CanCreateDealResponse {
   canCreate: boolean;
   currentDeals: number;
   reason: string | null;
+}
+
+// Organization
+export interface Organization {
+  id: string;
+  name: string;
+  brandColor: string;
+  logoUrl?: string;
+  subscriptionStatus: string;
+  memberCount: number;
+}
+
+export interface OrganizationMember {
+  agentId: string;
+  email: string;
+  fullName?: string;
+  photoUrl?: string;
+  role: 'Admin' | 'TeamLead' | 'Employee';
+  activeDeals: number;
+  joinedAt: string;
+}
+
+export interface Invitation {
+  id: string;
+  email: string;
+  role: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface TeamDeal {
+  id: string;
+  clientName: string;
+  propertyAddress: string;
+  status: string;
+  assignedToAgentId?: string;
+  assignedToName?: string;
+  assignedToPhotoUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TeamStats {
+  totalDeals: number;
+  activeDeals: number;
+  completedThisMonth: number;
+  memberCount: number;
+}
+
+export interface InviteInfo {
+  organizationName: string;
+  email: string;
+  role: string;
+  expiresAt: string;
 }
