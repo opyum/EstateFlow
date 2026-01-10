@@ -63,6 +63,9 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddSingleton<IYousignService, YousignService>();
+builder.Services.AddScoped<IMigrationService, MigrationService>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IOrganizationContextService, OrganizationContextService>();
 
 // ========== SECURITY: Rate Limiting ==========
 builder.Services.AddRateLimiter(options =>
@@ -113,6 +116,13 @@ using (var scope = app.Services.CreateScope())
 
     // Apply schema updates for existing databases
     await ApplySchemaUpdates(db);
+}
+
+// Run data migration
+using (var scope = app.Services.CreateScope())
+{
+    var migrationService = scope.ServiceProvider.GetRequiredService<IMigrationService>();
+    await migrationService.MigrateAgentsToOrganizationsAsync();
 }
 
 static async Task ApplySchemaUpdates(EstateFlowDbContext db)
@@ -270,5 +280,5 @@ app.MapControllers();
 // Health check endpoint
 app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));
 
-app.Run();
+await app.RunAsync();
 public partial class Program { }

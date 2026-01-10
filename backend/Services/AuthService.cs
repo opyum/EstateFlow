@@ -85,6 +85,7 @@ public class AuthService : IAuthService
     {
         var magicLink = await _context.MagicLinks
             .Include(m => m.Agent)
+                .ThenInclude(a => a.OrganizationMemberships)
             .FirstOrDefaultAsync(m => m.Token == token && m.UsedAt == null && m.ExpiresAt > DateTime.UtcNow);
 
         if (magicLink == null)
@@ -94,18 +95,36 @@ public class AuthService : IAuthService
         magicLink.UsedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
-        // Generate JWT
-        return GenerateJwtToken(magicLink.Agent.Id, magicLink.Agent.Email);
+        // Get first organization membership (or null if none)
+        var membership = magicLink.Agent.OrganizationMemberships.FirstOrDefault();
+
+        return GenerateJwtToken(
+            magicLink.Agent.Id,
+            magicLink.Agent.Email,
+            membership?.OrganizationId,
+            membership?.Role
+        );
     }
 
-    public string GenerateJwtToken(Guid agentId, string email)
+    public string GenerateJwtToken(Guid agentId, string email, Guid? organizationId = null, Role? role = null)
     {
-        var claims = new[]
+        var claims = new List<Claim>
         {
             new Claim(ClaimTypes.NameIdentifier, agentId.ToString()),
             new Claim(ClaimTypes.Email, email),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
+
+        if (organizationId.HasValue)
+        {
+            claims.Add(new Claim("org_id", organizationId.Value.ToString()));
+        }
+
+        if (role.HasValue)
+        {
+            claims.Add(new Claim("role", role.Value.ToString()));
+            claims.Add(new Claim(ClaimTypes.Role, role.Value.ToString()));
+        }
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSecret));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
