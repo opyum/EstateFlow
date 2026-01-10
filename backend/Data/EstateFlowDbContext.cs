@@ -16,6 +16,9 @@ public class EstateFlowDbContext : DbContext
     public DbSet<TimelineTemplate> TimelineTemplates => Set<TimelineTemplate>();
     public DbSet<MagicLink> MagicLinks => Set<MagicLink>();
     public DbSet<DealView> DealViews => Set<DealView>();
+    public DbSet<Organization> Organizations => Set<Organization>();
+    public DbSet<OrganizationMember> OrganizationMembers => Set<OrganizationMember>();
+    public DbSet<Invitation> Invitations => Set<Invitation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -40,6 +43,21 @@ public class EstateFlowDbContext : DbContext
                   .WithMany(a => a.Deals)
                   .HasForeignKey(d => d.AgentId)
                   .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(d => d.Organization)
+                  .WithMany(o => o.Deals)
+                  .HasForeignKey(d => d.OrganizationId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(d => d.AssignedToAgent)
+                  .WithMany()
+                  .HasForeignKey(d => d.AssignedToAgentId)
+                  .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(d => d.CreatedByAgent)
+                  .WithMany()
+                  .HasForeignKey(d => d.CreatedByAgentId)
+                  .OnDelete(DeleteBehavior.SetNull);
         });
 
         // TimelineStep
@@ -95,6 +113,47 @@ public class EstateFlowDbContext : DbContext
 
             entity.HasIndex(e => e.DealId);
             entity.HasIndex(e => e.ViewedAt);
+        });
+
+        // Organization
+        modelBuilder.Entity<Organization>(entity =>
+        {
+            entity.Property(e => e.SubscriptionStatus)
+                  .HasConversion<string>();
+        });
+
+        // OrganizationMember (composite key)
+        modelBuilder.Entity<OrganizationMember>(entity =>
+        {
+            entity.HasKey(e => new { e.OrganizationId, e.AgentId });
+
+            entity.Property(e => e.Role)
+                  .HasConversion<string>();
+
+            entity.HasOne(e => e.Organization)
+                  .WithMany(o => o.Members)
+                  .HasForeignKey(e => e.OrganizationId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Agent)
+                  .WithMany(a => a.OrganizationMemberships)
+                  .HasForeignKey(e => e.AgentId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Invitation
+        modelBuilder.Entity<Invitation>(entity =>
+        {
+            entity.HasIndex(e => e.Token).IsUnique();
+            entity.HasIndex(e => new { e.OrganizationId, e.Email });
+
+            entity.Property(e => e.Role)
+                  .HasConversion<string>();
+
+            entity.HasOne(e => e.Organization)
+                  .WithMany(o => o.Invitations)
+                  .HasForeignKey(e => e.OrganizationId)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
 
         // Seed timeline templates

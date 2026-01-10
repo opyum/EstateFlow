@@ -132,6 +132,87 @@ static async Task ApplySchemaUpdates(EstateFlowDbContext db)
 
     try
     {
+        // ========== Create multi-tenant tables if they don't exist ==========
+
+        // Create organizations table
+        var createOrgsCmd = connection.CreateCommand();
+        createOrgsCmd.CommandText = @"
+            CREATE TABLE IF NOT EXISTS organizations (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                name VARCHAR(255) NOT NULL,
+                brand_color VARCHAR(50),
+                logo_url VARCHAR(500),
+                stripe_customer_id VARCHAR(255),
+                stripe_subscription_id VARCHAR(255),
+                stripe_seat_item_id VARCHAR(255),
+                subscription_status VARCHAR(50) NOT NULL DEFAULT 'Trial',
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )";
+        await createOrgsCmd.ExecuteNonQueryAsync();
+        Console.WriteLine("Ensured organizations table exists");
+
+        // Create organization_members table
+        var createMembersCmd = connection.CreateCommand();
+        createMembersCmd.CommandText = @"
+            CREATE TABLE IF NOT EXISTS organization_members (
+                organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+                agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+                role VARCHAR(50) NOT NULL DEFAULT 'Admin',
+                joined_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (organization_id, agent_id)
+            )";
+        await createMembersCmd.ExecuteNonQueryAsync();
+        Console.WriteLine("Ensured organization_members table exists");
+
+        // Create invitations table
+        var createInvitesCmd = connection.CreateCommand();
+        createInvitesCmd.CommandText = @"
+            CREATE TABLE IF NOT EXISTS invitations (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+                email VARCHAR(255) NOT NULL,
+                role VARCHAR(50) NOT NULL DEFAULT 'Employee',
+                token VARCHAR(255) NOT NULL UNIQUE,
+                stripe_subscription_item_id VARCHAR(255),
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NOT NULL,
+                accepted_at TIMESTAMP
+            )";
+        await createInvitesCmd.ExecuteNonQueryAsync();
+        Console.WriteLine("Ensured invitations table exists");
+
+        // Add multi-tenant columns to deals table
+        var dealColumns = new[]
+        {
+            ("organization_id", "UUID"),
+            ("assigned_to_agent_id", "UUID"),
+            ("created_by_agent_id", "UUID")
+        };
+
+        foreach (var (columnName, columnType) in dealColumns)
+        {
+            var checkCmd = connection.CreateCommand();
+            checkCmd.CommandText = @"
+                SELECT COUNT(*) FROM information_schema.columns
+                WHERE table_name = 'deals' AND column_name = @columnName";
+
+            var columnParam = checkCmd.CreateParameter();
+            columnParam.ParameterName = "@columnName";
+            columnParam.Value = columnName;
+            checkCmd.Parameters.Add(columnParam);
+
+            var exists = Convert.ToInt32(await checkCmd.ExecuteScalarAsync()) > 0;
+
+            if (!exists)
+            {
+                var addCmd = connection.CreateCommand();
+                addCmd.CommandText = $"ALTER TABLE deals ADD COLUMN \"{columnName}\" {columnType}";
+                await addCmd.ExecuteNonQueryAsync();
+                Console.WriteLine($"Added missing column to deals: {columnName}");
+            }
+        }
+
         // ========== SECURITY: Whitelist of allowed column names to prevent SQL injection ==========
         var allowedColumns = new HashSet<string>
         {
