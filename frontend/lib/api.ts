@@ -62,6 +62,9 @@ export const agentApi = {
 
   getStats: (token: string) =>
     apiFetch<AgentStats>('/api/agents/me/stats', { token }),
+
+  getDashboard: (token: string) =>
+    apiFetch<AgentDashboardDto>('/api/agents/me/dashboard', { token }),
 };
 
 // Deals
@@ -285,6 +288,12 @@ export const organizationApi = {
       method: 'PUT',
       body: JSON.stringify({ assignToAgentId }),
     }),
+
+  getDashboard: (token: string) =>
+    apiFetch<OrgDashboardDto>('/api/organization/dashboard', { token }),
+
+  getAgentDashboard: (token: string, agentId: string) =>
+    apiFetch<AgentDashboardDto>(`/api/organization/dashboard/agent/${agentId}`, { token }),
 };
 
 // Invite (public)
@@ -469,4 +478,80 @@ export interface InviteInfo {
   email: string;
   role: string;
   expiresAt: string;
+}
+
+// Dashboard types
+export interface KpisDto {
+  activeDeals: number;
+  activeDealsTrend: number;
+  alertDeals: number;
+  alertCritical: number;
+  alertWarning: number;
+  completedThisMonth: number;
+  completedTrend: number;
+  avgCompletionDays: number;
+  avgCompletionTrend: number;
+}
+
+export interface AlertItemDto {
+  dealId: string;
+  dealName: string;
+  clientName: string;
+  stepTitle: string;
+  alertType: 'overdue' | 'due_soon' | 'inactive';
+  alertLevel: 'critical' | 'warning';
+  daysOverdue: number;
+  dueDate: string | null;
+}
+
+export interface AlertItemWithAgentDto extends AlertItemDto {
+  agentId: string | null;
+  agentName: string;
+}
+
+export interface WeekItemDto {
+  dealId: string;
+  dealName: string;
+  clientName: string;
+  stepTitle: string;
+  stepStatus: string;
+  dueDate: string;
+}
+
+export interface WeekItemWithAgentDto extends WeekItemDto {
+  agentId: string | null;
+  agentName: string;
+}
+
+export interface WeekDayDto {
+  date: string;
+  items: WeekItemDto[];
+}
+
+export interface WeekDayWithAgentDto {
+  date: string;
+  items: WeekItemWithAgentDto[];
+}
+
+export interface TeamMemberStatsDto {
+  agentId: string;
+  agentName: string;
+  photoUrl: string | null;
+  activeDeals: number;
+  alertCritical: number;
+  alertWarning: number;
+  completedThisMonth: number;
+}
+
+export interface AgentDashboardDto {
+  kpis: KpisDto;
+  today: AlertItemDto[];
+  thisWeek: WeekDayDto[];
+}
+
+export interface OrgDashboardDto {
+  kpis: KpisDto;
+  today: AlertItemWithAgentDto[];
+  thisWeek: WeekDayWithAgentDto[];
+  team: TeamMemberStatsDto[];
 }
