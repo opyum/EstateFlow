@@ -321,14 +321,20 @@ public class StripeController : ControllerBase
         {
             if (Guid.TryParse(agentIdStr, out var agentId))
             {
-                var agent = await _context.Agents.FindAsync(agentId);
-                if (agent != null)
+                // Find agent's admin organization
+                var membership = await _context.OrganizationMembers
+                    .Include(m => m.Organization)
+                    .FirstOrDefaultAsync(m => m.AgentId == agentId && m.Role == Role.Admin);
+
+                if (membership != null)
                 {
-                    agent.SubscriptionStatus = SubscriptionStatus.Active;
-                    agent.StripeSubscriptionId = session.SubscriptionId;
-                    agent.UpdatedAt = DateTime.UtcNow;
+                    var org = membership.Organization;
+                    org.SubscriptionStatus = SubscriptionStatus.Active;
+                    org.StripeSubscriptionId = session.SubscriptionId;
+                    org.StripeCustomerId = session.CustomerId;
+                    org.UpdatedAt = DateTime.UtcNow;
                     await _context.SaveChangesAsync();
-                    _logger.LogInformation("Agent {AgentId} subscription activated", agentId);
+                    _logger.LogInformation("Organization {OrgId} subscription activated", org.Id);
                 }
             }
         }
@@ -339,13 +345,13 @@ public class StripeController : ControllerBase
         var invoice = stripeEvent.Data.Object as Invoice;
         if (invoice?.CustomerId != null)
         {
-            var agent = await _context.Agents.FirstOrDefaultAsync(a => a.StripeCustomerId == invoice.CustomerId);
-            if (agent != null)
+            var org = await _context.Organizations.FirstOrDefaultAsync(o => o.StripeCustomerId == invoice.CustomerId);
+            if (org != null)
             {
-                agent.SubscriptionStatus = SubscriptionStatus.Active;
-                agent.UpdatedAt = DateTime.UtcNow;
+                org.SubscriptionStatus = SubscriptionStatus.Active;
+                org.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
-                _logger.LogInformation("Agent {AgentId} subscription renewed", agent.Id);
+                _logger.LogInformation("Organization {OrgId} subscription renewed", org.Id);
             }
         }
     }
@@ -355,11 +361,10 @@ public class StripeController : ControllerBase
         var invoice = stripeEvent.Data.Object as Invoice;
         if (invoice?.CustomerId != null)
         {
-            var agent = await _context.Agents.FirstOrDefaultAsync(a => a.StripeCustomerId == invoice.CustomerId);
-            if (agent != null)
+            var org = await _context.Organizations.FirstOrDefaultAsync(o => o.StripeCustomerId == invoice.CustomerId);
+            if (org != null)
             {
-                _logger.LogWarning("Payment failed for agent {AgentId}", agent.Id);
-                // Could send email notification here
+                _logger.LogWarning("Payment failed for organization {OrgId}", org.Id);
             }
         }
     }
@@ -369,13 +374,13 @@ public class StripeController : ControllerBase
         var subscription = stripeEvent.Data.Object as Subscription;
         if (subscription?.CustomerId != null)
         {
-            var agent = await _context.Agents.FirstOrDefaultAsync(a => a.StripeCustomerId == subscription.CustomerId);
-            if (agent != null)
+            var org = await _context.Organizations.FirstOrDefaultAsync(o => o.StripeCustomerId == subscription.CustomerId);
+            if (org != null)
             {
-                agent.SubscriptionStatus = SubscriptionStatus.Cancelled;
-                agent.UpdatedAt = DateTime.UtcNow;
+                org.SubscriptionStatus = SubscriptionStatus.Cancelled;
+                org.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
-                _logger.LogInformation("Agent {AgentId} subscription cancelled", agent.Id);
+                _logger.LogInformation("Organization {OrgId} subscription cancelled", org.Id);
             }
         }
     }
@@ -385,24 +390,21 @@ public class StripeController : ControllerBase
         var subscription = stripeEvent.Data.Object as Subscription;
         if (subscription?.CustomerId != null)
         {
-            var agent = await _context.Agents.FirstOrDefaultAsync(a => a.StripeCustomerId == subscription.CustomerId);
-            if (agent != null)
+            var org = await _context.Organizations.FirstOrDefaultAsync(o => o.StripeCustomerId == subscription.CustomerId);
+            if (org != null)
             {
-                // Update subscription status based on Stripe status
-                agent.SubscriptionStatus = subscription.Status switch
+                org.SubscriptionStatus = subscription.Status switch
                 {
                     "active" => SubscriptionStatus.Active,
-                    "past_due" => SubscriptionStatus.Active, // Still active but payment pending
+                    "past_due" => SubscriptionStatus.Active,
                     "canceled" => SubscriptionStatus.Cancelled,
                     "unpaid" => SubscriptionStatus.Expired,
-                    _ => agent.SubscriptionStatus
+                    _ => org.SubscriptionStatus
                 };
-
-                // Update subscription ID in case of plan change
-                agent.StripeSubscriptionId = subscription.Id;
-                agent.UpdatedAt = DateTime.UtcNow;
+                org.StripeSubscriptionId = subscription.Id;
+                org.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
-                _logger.LogInformation("Agent {AgentId} subscription updated to {Status}", agent.Id, subscription.Status);
+                _logger.LogInformation("Organization {OrgId} subscription updated to {Status}", org.Id, subscription.Status);
             }
         }
     }
