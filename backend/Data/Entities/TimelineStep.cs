@@ -40,6 +40,23 @@ public class TimelineStep
     [Column("order")]
     public int Order { get; set; }
 
+    // Seuils configurables (hérités du template, modifiables par deal)
+    [Column("expected_duration_days")]
+    public int ExpectedDurationDays { get; set; } = 14;
+
+    [Column("inactivity_warning_days")]
+    public int InactivityWarningDays { get; set; } = 5;
+
+    [Column("inactivity_critical_days")]
+    public int InactivityCriticalDays { get; set; } = 10;
+
+    // Tracking d'activité
+    [Column("started_at")]
+    public DateTime? StartedAt { get; set; }
+
+    [Column("last_activity_at")]
+    public DateTime? LastActivityAt { get; set; }
+
     // Navigation
     [ForeignKey("DealId")]
     public Deal Deal { get; set; } = null!;
