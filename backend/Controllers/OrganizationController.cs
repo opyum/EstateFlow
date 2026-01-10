@@ -298,19 +298,29 @@ public class OrganizationController : ControllerBase
         var stripeSecretKey = Environment.GetEnvironmentVariable("STRIPE_SECRET_KEY");
         var stripeSeatPriceId = Environment.GetEnvironmentVariable("STRIPE_SEAT_PRICE_ID");
 
+        Console.WriteLine($"[AddStripeSeat] Starting for org {org.Id}");
+        Console.WriteLine($"[AddStripeSeat] STRIPE_SECRET_KEY present: {!string.IsNullOrEmpty(stripeSecretKey)}");
+        Console.WriteLine($"[AddStripeSeat] STRIPE_SEAT_PRICE_ID: {stripeSeatPriceId}");
+
         if (string.IsNullOrEmpty(stripeSecretKey) || string.IsNullOrEmpty(stripeSeatPriceId))
+        {
+            Console.WriteLine("[AddStripeSeat] Stripe not configured, skipping");
             return true; // Skip if Stripe not configured
+        }
 
         StripeConfiguration.ApiKey = stripeSecretKey;
 
         // If organization doesn't have Stripe data, sync from admin agent's Stripe customer
         if (string.IsNullOrEmpty(org.StripeSubscriptionId))
         {
+            Console.WriteLine("[AddStripeSeat] Org has no StripeSubscriptionId, fetching from admin agent");
             var adminMember = await _context.OrganizationMembers
                 .Include(m => m.Agent)
                 .FirstOrDefaultAsync(m => m.OrganizationId == org.Id && m.Role == Role.Admin);
 
             var customerId = adminMember?.Agent?.StripeCustomerId;
+            Console.WriteLine($"[AddStripeSeat] Admin agent StripeCustomerId: {customerId}");
+
             if (!string.IsNullOrEmpty(customerId))
             {
                 // Fetch subscription from Stripe using customer ID
@@ -321,47 +331,59 @@ public class OrganizationController : ControllerBase
                     Limit = 1
                 });
 
+                Console.WriteLine($"[AddStripeSeat] Found {subscriptions.Data.Count} subscriptions for customer");
+
                 if (subscriptions.Data.Count > 0)
                 {
                     org.StripeSubscriptionId = subscriptions.Data[0].Id;
                     org.StripeCustomerId = customerId;
                     await _context.SaveChangesAsync();
+                    Console.WriteLine($"[AddStripeSeat] Synced subscription ID: {org.StripeSubscriptionId}");
                 }
                 else
                 {
+                    Console.WriteLine("[AddStripeSeat] Customer has no active subscription, skipping");
                     return true; // Customer has no active subscription
                 }
             }
             else
             {
+                Console.WriteLine("[AddStripeSeat] No Stripe customer ID found, skipping");
                 return true; // No Stripe customer to add seat to
             }
         }
 
         try
         {
+            Console.WriteLine($"[AddStripeSeat] Adding seat to subscription {org.StripeSubscriptionId}");
             StripeConfiguration.ApiKey = stripeSecretKey;
             var subscriptionService = new SubscriptionService();
             var subscription = await subscriptionService.GetAsync(org.StripeSubscriptionId);
             var seatItem = subscription.Items.Data.FirstOrDefault(i => i.Price.Id == stripeSeatPriceId);
+
+            Console.WriteLine($"[AddStripeSeat] Existing seat item: {seatItem?.Id}, quantity: {seatItem?.Quantity}");
 
             if (seatItem != null)
             {
                 var itemService = new SubscriptionItemService();
                 await itemService.UpdateAsync(seatItem.Id, new SubscriptionItemUpdateOptions { Quantity = seatItem.Quantity + 1 });
                 org.StripeSeatItemId = seatItem.Id;
+                Console.WriteLine($"[AddStripeSeat] Updated seat quantity to {seatItem.Quantity + 1}");
             }
             else
             {
                 var itemService = new SubscriptionItemService();
                 var newItem = await itemService.CreateAsync(new SubscriptionItemCreateOptions { Subscription = org.StripeSubscriptionId, Price = stripeSeatPriceId, Quantity = 1 });
                 org.StripeSeatItemId = newItem.Id;
+                Console.WriteLine($"[AddStripeSeat] Created new seat item: {newItem.Id}");
             }
             await _context.SaveChangesAsync();
+            Console.WriteLine("[AddStripeSeat] Successfully added seat");
             return true;
         }
-        catch (StripeException)
+        catch (StripeException ex)
         {
+            Console.WriteLine($"[AddStripeSeat] Stripe error: {ex.Message}");
             return false;
         }
     }
