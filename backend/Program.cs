@@ -66,6 +66,7 @@ builder.Services.AddSingleton<IYousignService, YousignService>();
 builder.Services.AddScoped<IMigrationService, MigrationService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IOrganizationContextService, OrganizationContextService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
 
 // ========== SECURITY: Rate Limiting ==========
 builder.Services.AddRateLimiter(options =>
